@@ -150,15 +150,45 @@ def resolve_vehicle(message: str, vin: str | None, session_vin: str | None = Non
         "decoded": decoded,
         "hints": ordered,
         "variant_id": (decoded or {}).get("variant_id"),
-        "vehicle_id": _vehicle_id_for_variant((decoded or {}).get("variant_id")),
+        "vehicle_id": _vehicle_id_for_decode(decoded),
         "label": vehicle_label(decoded),
     }
 
 
-def _vehicle_id_for_variant(variant_id: str | None) -> str | None:
-    if not variant_id:
+def _vehicle_id_for_decode(decoded: dict[str, Any] | None) -> str | None:
+    if not decoded:
         return None
     from app.db import fetch_one
 
-    row = fetch_one("SELECT vehicle_id FROM vehicle_variants WHERE id = %s", (variant_id,))
-    return str(row["vehicle_id"]) if row and row.get("vehicle_id") else None
+    variant_id = decoded.get("variant_id")
+    if variant_id:
+        row = fetch_one("SELECT vehicle_id FROM vehicle_variants WHERE id = %s", (variant_id,))
+        if row and row.get("vehicle_id"):
+            return str(row["vehicle_id"])
+    make = decoded.get("make")
+    model = decoded.get("model")
+    year = decoded.get("year")
+    if not (make and model):
+        return None
+    if year:
+        row = fetch_one(
+            """
+            SELECT id FROM vehicles
+             WHERE lower(make) = lower(%s)
+               AND lower(model) = lower(%s)
+               AND year_from <= %s AND year_to >= %s
+             ORDER BY year_from DESC
+             LIMIT 1
+            """,
+            (make, model, year, year),
+        )
+    else:
+        row = fetch_one(
+            """
+            SELECT id FROM vehicles
+             WHERE lower(make) = lower(%s) AND lower(model) = lower(%s)
+             LIMIT 1
+            """,
+            (make, model),
+        )
+    return str(row["id"]) if row else None

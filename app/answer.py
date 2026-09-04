@@ -12,9 +12,21 @@ from app.retrieval import retrieve
 
 DIGIT_RE = re.compile(r"\d+(?:\.\d+)?")
 FOREIGN_MAKE = re.compile(
-    r"\b(bmw|toyota|ford|chevy|chevrolet|nissan|mazda|audi|volkswagen|\bvw\b|subaru|hyundai|kia|lexus|mercedes|porsche)\b",
+    r"\b(bmw|toyota|ford|chevy|chevrolet|nissan|mazda|audi|volkswagen|\bvw\b|subaru|hyundai|kia|lexus|mercedes|porsche|honda)\b",
     re.IGNORECASE,
 )
+MAKE_ALIASES = {"chevy": "chevrolet", "vw": "volkswagen"}
+
+
+def _normalize_make(name: str) -> str:
+    return MAKE_ALIASES.get(name.lower(), name.lower())
+
+
+def _has_ingested_make(make: str) -> bool:
+    from app.db import fetch_one
+
+    row = fetch_one("SELECT 1 FROM vehicles WHERE lower(make) = %s LIMIT 1", (make,))
+    return bool(row)
 
 SYSTEM = """You are Hoodwise, a factory/owner-manual assistant.
 
@@ -23,11 +35,13 @@ HARD RULES:
 - Write a short, direct mechanic-style answer (3–6 sentences max).
 - For any numeric spec: only use numbers that appear in the provided specs/chunks. Quote values verbatim.
 - If a vehicle is pinned, answer for THAT vehicle only from its ingested manual.
-- If no vehicle is pinned, use the retrieved Civic factory-manual rows and say so.
+- If no vehicle is pinned, say so and only use the retrieved rows.
 - If the retrieved material does not contain the number, say you do not have that spec. Do not guess.
 - Mention replace_required fasteners if flagged.
 - Cite doc_id and page_number once at the end of each claim.
 - Owner manuals are not workshop manuals. If only an owner handbook was retrieved, say that.
+- Capacity tables mix fluids. A litre figure is engine oil only if that same snippet labels it engine oil (or API/ILSAC/ACEA engine oil). ATF / SP-IV / PSF / coolant / fuel / axle oil are not engine oil. Do not map a VIN 2.0L to an R2.0 transmission row.
+- If several engine variants are listed, quote each labeled engine-oil row. Do not pick one volume just because the displacement looks similar.
 """
 
 
@@ -79,8 +93,36 @@ def _dedupe_specs(specs: list[dict[str, Any]], limit: int = 3) -> list[dict[str,
     return out
 
 
+_FLUID_WINDOW = re.compile(
+    r"(.{0,120})(\d+(?:[.,]\d+)?(?:\s*~\s*\d+(?:[.,]\d+)?)?\s*l\s*\([^)]*US q[^)]*\))(.{0,120})",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _fluid_windows(retrieved: dict[str, Any]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for chunk in retrieved.get("chunks") or []:
+        text = chunk.get("content") or ""
+        for before, value, after in _FLUID_WINDOW.findall(text):
+            window = re.sub(r"\s+", " ", f"{before} {value} {after}").strip()
+            if window in seen:
+                continue
+            seen.add(window)
+            out.append(f"p.{chunk.get('page_number')}: {window}")
+    return out[:12]
+
+
 def _format_context(retrieved: dict[str, Any], vehicle: dict[str, Any] | None) -> str:
     lines = [f"PINNED VEHICLE: {json.dumps(vehicle) if vehicle else 'none'}"]
+    lines.append(
+        "TABLE NOTE: retrieved pages may list engine oil, ATF, coolant, and fuel together. "
+        "Only a volume labeled engine oil / API SM / ILSAC / ACEA is an oil fill."
+    )
+    windows = _fluid_windows(retrieved)
+    if windows:
+        lines.append("LABELED VOLUMES:")
+        lines.extend(windows)
     lines.append("SPECS:")
     if not retrieved["specs"]:
         lines.append("(none)")
@@ -101,14 +143,14 @@ def _format_context(retrieved: dict[str, Any], vehicle: dict[str, Any] | None) -
     lines.append("CHUNKS:")
     if not retrieved["chunks"]:
         lines.append("(none)")
-    for chunk in retrieved["chunks"][:4]:
+    for chunk in retrieved["chunks"][:6]:
         lines.append(
             json.dumps(
                 {
                     "doc": chunk.get("doc_id"),
                     "page": chunk["page_number"],
                     "section": chunk.get("section_path") or chunk.get("section_name"),
-                    "content": (chunk.get("content") or "")[:900],
+                    "content": (chunk.get("content") or "")[:1600],
                 }
             )
         )
@@ -175,8 +217,10 @@ def generate_answer(
     mentioned = FOREIGN_MAKE.search(question)
     pinned_make = str((vehicle or {}).get("make") or "").lower()
     if mentioned:
-        asked = mentioned.group(1).lower()
-        if asked not in {pinned_make, "honda", "hyundai"}:
+        asked = _normalize_make(mentioned.group(1))
+        if pinned_make and asked != pinned_make:
+            return _refuse(retrieved, f"Pinned vehicle is {pinned_make}, not {asked}.")
+        if not pinned_make and not _has_ingested_make(asked):
             return _refuse(retrieved, f"No ingested manual for {asked}.")
     if retrieved["numeric"] and not retrieved["specs"] and not retrieved["chunks"]:
         return _refuse(retrieved, "No matching spec or procedure row was retrieved.")

@@ -11,7 +11,7 @@ import pymupdf
 from PIL import Image
 
 from app.config import settings
-from ingestion.hyundai import describe_pdf
+from ingestion.catalog import describe_pdf
 from ingestion.section_map import SECTIONS, doc_id_from_filename
 
 try:
@@ -88,12 +88,16 @@ def extract_pdf(
     out_dir: Path | None = None,
     *,
     skip_images: bool = False,
+    doc_id: str | None = None,
+    section_name: str | None = None,
 ) -> ExtractedDocument:
     pdf_path = Path(pdf_path)
-    hyundai = describe_pdf(pdf_path)
-    if hyundai:
-        doc_id = hyundai["doc_id"]
-        section = hyundai["section_name"]
+    listed = None if doc_id else describe_pdf(pdf_path)
+    if doc_id:
+        section = section_name or "Unknown"
+    elif listed:
+        doc_id = listed["doc_id"]
+        section = listed["section_name"]
     else:
         doc_id = doc_id_from_filename(pdf_path.name)
         section = SECTIONS.get(doc_id, "Unknown")
@@ -112,7 +116,7 @@ def extract_pdf(
     try:
         for i, page in enumerate(document):
             page_number = i + 1
-            text = page.get_text() or ""
+            text = (page.get_text() or "").replace("\x00", "")
             char_count = len(text.strip())
             has_text = char_count >= 20
             render_path = None

@@ -7,9 +7,10 @@ import sys
 from pathlib import Path
 
 from app.config import settings
+from app.db import fetch_one
 from ingestion.chunk import chunk_document
 from ingestion.embed import embed_document
-from ingestion.extract import extract_pdf, print_report
+from ingestion.extract import _file_sha256, extract_pdf, print_report
 from ingestion.persist import (
     finish_run,
     persist_caption_chunk,
@@ -19,7 +20,7 @@ from ingestion.persist import (
     update_diagram_caption,
     upsert_document,
 )
-from ingestion.hyundai import catalog_targets, ensure_hyundai_document
+from ingestion.catalog import catalog_targets, ensure_catalog_document
 from ingestion.section_map import DAMAGED_DOC_IDS, MVP_DOC_IDS
 from ingestion.specs import dump_specs, extract_document_specs
 from ingestion.vision import classify_image
@@ -54,6 +55,22 @@ def repair_pdfs(manual_dir: Path) -> None:
             print(f"qpdf {doc_id} failed ({result.returncode}): {result.stderr.strip() or result.stdout.strip()}")
 
 
+def _already_embedded(doc_id: str, pdf_path: Path) -> bool:
+    row = fetch_one(
+        """
+        SELECT d.file_hash,
+               (SELECT count(*) FROM chunks c
+                 WHERE c.document_id = d.id AND c.embedding IS NOT NULL) AS n
+          FROM documents d
+         WHERE d.doc_id = %s
+        """,
+        (doc_id,),
+    )
+    if not row or not row["n"]:
+        return False
+    return row["file_hash"] == _file_sha256(pdf_path) and int(row["n"]) > 50
+
+
 def ingest_one(
     pdf_path: Path,
     use_vision: bool,
@@ -61,9 +78,16 @@ def ingest_one(
     *,
     skip_images: bool = False,
     vehicle_id: str | None = None,
+    doc_id: str | None = None,
+    section_name: str | None = None,
 ) -> None:
     print(f"\nExtracting {pdf_path} ...")
-    extracted = extract_pdf(pdf_path, skip_images=skip_images)
+    extracted = extract_pdf(
+        pdf_path,
+        skip_images=skip_images,
+        doc_id=doc_id,
+        section_name=section_name,
+    )
     print_report(extracted)
     document_id = upsert_document(extracted, vehicle_id=vehicle_id)
     run_id = start_run(document_id, "extract")
@@ -108,7 +132,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--repair", action="store_true", help="qpdf-repair damaged PDFs")
     parser.add_argument("--vision", action="store_true", help="Run Claude vision classify + spec extract")
     parser.add_argument("--embed", action="store_true", help="Embed chunks after extract")
-    parser.add_argument("--hyundai", action="store_true", help="Ingest Hyundai UK owner manuals")
+    parser.add_argument(
+        "--catalog",
+        nargs="?",
+        const="*",
+        metavar="FILE",
+        help="Ingest manuals from ingestion/catalogs/*.json (or one catalog file)",
+    )
     args = parser.parse_args(argv)
 
     manual_dir = Path(settings.manual_dir)
@@ -120,14 +150,18 @@ def main(argv: list[str] | None = None) -> int:
     targets: list[Path] = []
     if args.mvp:
         targets = [manual_dir / f"{doc_id}.pdf" for doc_id in MVP_DOC_IDS]
-    elif args.hyundai:
-        hy_targets = catalog_targets()
-        if not hy_targets:
-            print("no Hyundai owner manuals found", file=sys.stderr)
+    elif args.catalog:
+        catalog_path = None if args.catalog == "*" else Path(args.catalog)
+        targets_meta = catalog_targets(catalog_path)
+        if not targets_meta:
+            print("no catalog manuals found", file=sys.stderr)
             return 1
         failed = 0
-        for path, meta in hy_targets:
-            vehicle_id = ensure_hyundai_document(meta)
+        for path, meta in targets_meta:
+            vehicle_id = ensure_catalog_document(meta)
+            if _already_embedded(meta["doc_id"], path):
+                print(f"skip {meta['doc_id']} (already embedded)")
+                continue
             try:
                 ingest_one(
                     path,
@@ -135,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
                     do_embed=args.embed,
                     skip_images=True,
                     vehicle_id=vehicle_id,
+                    doc_id=meta["doc_id"],
+                    section_name=meta["section_name"],
                 )
             except Exception as exc:
                 failed += 1
@@ -144,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
         p = Path(args.pdf)
         targets = [p if p.exists() else manual_dir / p.name]
     else:
-        parser.error("pass --pdf, --mvp, --hyundai, or --repair")
+        parser.error("pass --pdf, --mvp, --catalog, or --repair")
 
     for path in targets:
         if not path.exists():

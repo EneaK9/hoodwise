@@ -650,9 +650,13 @@ def decode_vin(vin: str) -> dict[str, Any]:
                 "source": cached["source"],
                 "confidence": cached["confidence"],
             }
+            if not body.get("variant_id"):
+                body["variant_id"] = _match_variant(body)
             if body.get("source") == "vincario" and not body.get("history") and has_global_vin_api():
                 body = enrich_vincario_history(body, vin)
                 body["cached"] = False
+                _store_decode(body)
+            elif body.get("variant_id") and not cached_body.get("variant_id"):
                 _store_decode(body)
             return body
 

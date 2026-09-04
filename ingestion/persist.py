@@ -54,7 +54,7 @@ def upsert_document(doc: ExtractedDocument, vehicle_id: str | None = None) -> st
                     (
                         document_id,
                         page.page_number,
-                        page.text,
+                        (page.text or "").replace("\x00", ""),
                         page.char_count,
                         page.has_text_layer,
                         page.render_path,
@@ -95,7 +95,7 @@ def persist_chunks(document_id: str, chunks: list[TextChunk]) -> int:
                         chunk.page_number,
                         chunk.section_path,
                         chunk.chunk_type,
-                        chunk.content,
+                        chunk.content.replace("\x00", ""),
                     ),
                 )
         conn.commit()
@@ -126,7 +126,7 @@ def persist_specs(document_id: str, rows: list[tuple[ExtractedSpec, str]]) -> in
                         spec.torque_sequence,
                         spec.replace_required,
                         spec.condition_note,
-                        spec.raw_context,
+                        (spec.raw_context or "").replace("\x00", ""),
                         spec.source,
                         spec.confidence,
                         status,

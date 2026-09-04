@@ -1,5 +1,12 @@
+from app.answer import _fluid_windows
 from app.resolve import clean_part_name, infer_hints_from_decode, infer_hints_from_text
-from app.retrieval import filter_specs_for_hints
+from app.retrieval import (
+    _is_capacity_query,
+    _keywords,
+    _merge_page_chunks,
+    _ts_or_query,
+    filter_specs_for_hints,
+)
 
 
 def test_clean_part_prefers_known_phrase() -> None:
@@ -28,3 +35,38 @@ def test_filter_drops_except_typer_when_car_is_typer() -> None:
     kept = filter_specs_for_hints(rows, ["typer"])
     assert len(kept) == 1
     assert kept[0]["value_raw"] == "15"
+
+
+def test_oil_question_keeps_engine_oil_terms() -> None:
+    keys = _keywords("how much engine oil does this car take")
+    assert "engine" in keys
+    assert "oil" in keys
+    assert "car" not in keys
+    assert "take" not in keys
+    assert " | " in _ts_or_query("how much engine oil does this car take")
+    assert _is_capacity_query("how much engine oil does this car take")
+    merged = _merge_page_chunks(
+        [
+            {"id": "a", "doc_id": "HY", "page_number": 792, "content": "Engine oil"},
+            {"id": "b", "doc_id": "HY", "page_number": 792, "content": "4.8 l (5.07 US qt.)"},
+        ]
+    )
+    assert len(merged) == 1
+    assert "4.8 l" in merged[0]["content"]
+
+
+def test_fluid_windows_keep_nearby_labels() -> None:
+    windows = _fluid_windows(
+        {
+            "chunks": [
+                {
+                    "page_number": 792,
+                    "content": "API Service SM *5, ILSAC GF-4\n4.8 l (5.07 US qt.) *4\nMICHANG ATF SP-IV\n7.8 l (8.24 US qt.)",
+                }
+            ]
+        }
+    )
+    blob = " ".join(windows)
+    assert "4.8 l" in blob
+    assert "API Service SM" in blob
+    assert "ATF" in blob

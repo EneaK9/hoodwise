@@ -29,13 +29,16 @@ Repair damaged PDFs (optional, needs `qpdf`):
 python -m ingestion.run_ingest --repair
 ```
 
-Ingest the MVP manuals (Maintenance, Battery, Brakes):
+Ingest factory PDFs or any owner-manual catalog in `ingestion/catalogs/`:
 
 ```bash
 python -m ingestion.run_ingest --mvp
+python -m ingestion.run_ingest --catalog --embed
 # add --vision if ANTHROPIC_API_KEY is set
 # add --embed if OPENAI_API_KEY is set
 ```
+
+A catalog is just JSON: `make`, `folder`, and a `manuals` list. Add another brand by dropping another file in `ingestion/catalogs/` — no code change.
 
 API + UI:
 

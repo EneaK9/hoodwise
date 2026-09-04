@@ -1,0 +1,291 @@
+{
+  "make": "Hyundai",
+  "folder": "Hyundai Owners Manuals",
+  "chassis": "UK-OM",
+  "market": "UK",
+  "source": "https://www.hyundai.com/uk/en/owners/owning-a-hyundai/owners-manuals.html",
+  "kind": "owners_manual",
+  "note": "Official Hyundai Motor UK owner handbooks. Not workshop/service manuals.",
+  "manuals": [
+    {
+      "model": "i10",
+      "label": "2007-2013",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i10+PA+Combinedpdf"
+    },
+    {
+      "model": "i10",
+      "label": "2014-2019",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i10+IApdf"
+    },
+    {
+      "model": "i10",
+      "label": "2014-2019 Audio Video Navigation",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/IA+i10+AVN+Owners+manualpdf"
+    },
+    {
+      "model": "i10",
+      "label": "2020-2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i10+AC3pdf"
+    },
+    {
+      "model": "i10",
+      "label": "2024-present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i10_MY25pdf"
+    },
+    {
+      "model": "i20",
+      "label": "2008-2014",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i20+PB+1-combinedpdf"
+    },
+    {
+      "model": "i20",
+      "label": "2015-2019",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i20+GBpdf"
+    },
+    {
+      "model": "i20",
+      "label": "2015-2019 Audio Video Navigation",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/%28GB%29+i20+18MY+Gen+5.0+AVN+pdf"
+    },
+    {
+      "model": "i20",
+      "label": "2020-2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i20+Bayon+BC3pdf"
+    },
+    {
+      "model": "i20",
+      "label": "2024-present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i20_MY25pdf"
+    },
+    {
+      "model": "i30",
+      "label": "2012-2016",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i30+GDe+-combinedpdf"
+    },
+    {
+      "model": "i30",
+      "label": "2012-2016 Audio Video Navigation",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Hyundai+-+GDe+AVN+manualpdf"
+    },
+    {
+      "model": "i30",
+      "label": "2017-present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/PDe_2025_en_UKpdf"
+    },
+    {
+      "model": "i30",
+      "label": "2017-present Audio Video Navigation",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/MAPM6220EPD.AEU1H+ENG+MFL69579038+OMpdf"
+    },
+    {
+      "model": "N Range",
+      "label": "i20 N 2020-2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i20N+BC3pdf"
+    },
+    {
+      "model": "N Range",
+      "label": "i30 N 2017-2024",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i30+PD+Npdf"
+    },
+    {
+      "model": "N Range",
+      "label": "i30 N 2017-2024 Audio Video Navigation",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/H_PDeN+18_G5.0EU_EEAVN+S0MS4BCU00_ENGLISH_1711pdf"
+    },
+    {
+      "model": "KONA",
+      "label": "KONA 2017-2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Kona+OSpdf"
+    },
+    {
+      "model": "KONA",
+      "label": "KONA 2023-2024",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Kona+SX2pdf"
+    },
+    {
+      "model": "KONA",
+      "label": "KONA 2024-Present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Kona_%28SX2%29_ICE_2024pdf"
+    },
+    {
+      "model": "KONA",
+      "label": "KONA Hybrid 2017-2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Kona+OS+HEVpdf"
+    },
+    {
+      "model": "KONA",
+      "label": "KONA Hybrid 2023-2024",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Kona+SX2+HEVpdf"
+    },
+    {
+      "model": "KONA",
+      "label": "KONA Electric 2020-2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Kona+OS+EVpdf"
+    },
+    {
+      "model": "KONA",
+      "label": "KONA Electric 2023-2024",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Kona+SX2+EVpdf"
+    },
+    {
+      "model": "KONA",
+      "label": "KONA Electric 2024-Present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Kona_%28SX2e_EV%29_2024pdf"
+    },
+    {
+      "model": "TUCSON",
+      "label": "TUCSON 2004-2009",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Tucson+JM+1-combinedpdf"
+    },
+    {
+      "model": "TUCSON",
+      "label": "TUCSON 2010-2014",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Tucson+Ix35+1-combinedpdf"
+    },
+    {
+      "model": "TUCSON",
+      "label": "TUCSON 2015-2020",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Tucscon+TLepdf"
+    },
+    {
+      "model": "TUCSON",
+      "label": "TUCSON 2021-2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Tuscon+NX4pdf"
+    },
+    {
+      "model": "TUCSON",
+      "label": "TUCSON Hybrid",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Tuscon+NX4+HEV+PHEVpdf"
+    },
+    {
+      "model": "TUCSON",
+      "label": "TUCSON 2024-present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/TUCSON_MY25pdf"
+    },
+    {
+      "model": "TUCSON",
+      "label": "TUCSON Hybrid",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/TUCSON_PE_HEV_PHEVpdf"
+    },
+    {
+      "model": "SANTA FE",
+      "label": "SANTA FE 2000-2006",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Santa+FE+SM+1-combinedpdf"
+    },
+    {
+      "model": "SANTA FE",
+      "label": "SANTA FE 2007-2011",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Santa+Fe+CM+1-mergedpdf"
+    },
+    {
+      "model": "SANTA FE",
+      "label": "SANTA FE 2016-2018",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Santa+Fe+DM+1-combinedpdf"
+    },
+    {
+      "model": "SANTA FE",
+      "label": "SANTA FE 2019-2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Santa+Fe+TMpdf"
+    },
+    {
+      "model": "SANTA FE",
+      "label": "SANTA FE Hybrid 2019-2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Sanat+Fe+TM+HEVpdf"
+    },
+    {
+      "model": "SANTA FE",
+      "label": "SANTA FE Plug-in Hybrid 2019-2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Sanat+Fe+TM+PHEVpdf"
+    },
+    {
+      "model": "SANTA FE",
+      "label": "SANTA FE Hybrid 2024-present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/SANTA_FE_MY25_HEVpdf"
+    },
+    {
+      "model": "SANTA FE",
+      "label": "SANTA FE Plug-in Hybrid 2024-present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/SANTA_FE_My25_PHEVpdf"
+    },
+    {
+      "model": "IONIQ 5",
+      "label": "2021-2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Ioniq+5pdf"
+    },
+    {
+      "model": "IONIQ 5",
+      "label": "2024-present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/IONIQ_5_PE_MY25pdf"
+    },
+    {
+      "model": "IONIQ 5",
+      "label": "2023",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/IONIQ_5N_MY24pdf"
+    },
+    {
+      "model": "IONIQ 5",
+      "label": "2024-present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/IONIQ_5N_MY25pdf"
+    },
+    {
+      "model": "IONIQ 6",
+      "label": "2022-present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Ioniq+6pdf-3"
+    },
+    {
+      "model": "IONIQ 9",
+      "label": "2025-present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/IONIQ+9+Owners+Manualpdf"
+    },
+    {
+      "model": "IONIQ",
+      "label": "IONIQ Hybrid 2016-2022",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Ionic+AE+HEVpdf"
+    },
+    {
+      "model": "IONIQ",
+      "label": "IONIQ Plug-in Hybrid 2016-2022",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Ionic+AE+PHEVpdf"
+    },
+    {
+      "model": "IONIQ",
+      "label": "IONIQ Electric 2016-2021",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Ionic+AE+EVpdf"
+    },
+    {
+      "model": "ix20",
+      "label": "2010-2019",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/ix20pdf-1"
+    },
+    {
+      "model": "ix20",
+      "label": "2010-2019 Audio Video Navigation",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Hyundai+-+ix20+AVN+Manual+ENGpdf"
+    },
+    {
+      "model": "i40",
+      "label": "2011-2019",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i40pdf"
+    },
+    {
+      "model": "i40",
+      "label": "2011-2019 Audio Video Navigation",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/%28VF%29+i40+AVN+4.0+Owners+manualpdf"
+    },
+    {
+      "model": "Veloster",
+      "label": "2011-2018",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Velostar+FS+1-combinedpdf"
+    },
+    {
+      "model": "Veloster",
+      "label": "2011-2018 Audio Video Navigation",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/Hyundai+-+Veloster+AVN+Manual+ENGpdf"
+    },
+    {
+      "model": "BAYON",
+      "label": "2021-present",
+      "url": "https://dmassets.hyundai.com/is/content/hyundaiautoever/i20+Bayon+BC3pdf"
+    }
+  ]
+}

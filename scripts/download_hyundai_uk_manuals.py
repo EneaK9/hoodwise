@@ -14,9 +14,7 @@ from urllib.parse import unquote
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
-CATALOG = ROOT / "ingestion" / "hyundai_uk_owners_manuals.json"
-OUT_DIR = ROOT / "Hyundai Owners Manuals"
-SOURCE = "https://www.hyundai.com/uk/en/owners/owning-a-hyundai/owners-manuals.html"
+CATALOG = ROOT / "ingestion" / "catalogs" / "hyundai_uk_owners.json"
 
 
 def _slug(item: dict) -> str:
@@ -27,9 +25,9 @@ def _slug(item: dict) -> str:
     return text[:160] or "manual"
 
 
-def download_one(item: dict) -> Path:
-    OUT_DIR.mkdir(exist_ok=True)
-    dest = OUT_DIR / f"{_slug(item)}.pdf"
+def download_one(item: dict, dest_dir: Path) -> Path:
+    dest_dir.mkdir(exist_ok=True)
+    dest = dest_dir / f"{_slug(item)}.pdf"
     if dest.exists() and dest.stat().st_size > 1000:
         return dest
     req = Request(item["url"], headers={"User-Agent": "Mozilla/5.0 HoodwiseManualFetch/1.0"})
@@ -45,6 +43,8 @@ def download_one(item: dict) -> Path:
 def main() -> int:
     only = [a.lower() for a in sys.argv[1:]]
     catalog = json.loads(CATALOG.read_text())
+    dest_dir = ROOT / catalog.get("folder", "manuals")
+    source = catalog.get("source") or ""
     rows = catalog["manuals"]
     if only:
         rows = [
@@ -52,13 +52,13 @@ def main() -> int:
             for r in rows
             if any(term in f"{r['model']} {r['label']}".lower() for term in only)
         ]
-    print(f"source {SOURCE}", flush=True)
-    print(f"downloading {len(rows)} manuals -> {OUT_DIR}", flush=True)
+    print(f"source {source}", flush=True)
+    print(f"downloading {len(rows)} manuals -> {dest_dir}", flush=True)
     failed = 0
     for row in rows:
         label = f"{row['model']} {row['label']}"
         try:
-            path = download_one(row)
+            path = download_one(row, dest_dir)
             print(f"ok {path.name} ({path.stat().st_size} bytes)", flush=True)
         except Exception as exc:
             failed += 1
