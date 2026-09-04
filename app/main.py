@@ -11,6 +11,8 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.answer import generate_answer
+from app.shop import shop_links
+from app.snippets import attach_snippets
 from app.resolve import public_vehicle, resolve_vehicle
 from app.auth import (
     COOKIE_NAME,
@@ -372,20 +374,31 @@ def _citations(result: dict) -> list[dict]:
     return out
 
 
+def _cited(result: dict, question: str) -> list[dict]:
+    return attach_snippets(_citations(result), question, result.get("answer") or "", result.get("retrieved") or {})
+
+
 def _run_chat(body: ChatIn, request: Request, user: dict | None) -> tuple[str, dict, dict | None, list[str]]:
     limit_chat(request)
     resolved = resolve_vehicle(body.message, body.vin, _session_vin(body.session_id))
     session_id = _ensure_session(body, user, resolved.get("variant_id") or body.variant_id, resolved.get("vin"))
+    vehicle = public_vehicle(resolved.get("decoded"))
     result = generate_answer(
         body.message,
         resolved.get("variant_id") or body.variant_id,
         hints=resolved.get("hints") or [],
-        vehicle=public_vehicle(resolved.get("decoded")),
+        vehicle=vehicle,
         vehicle_id=resolved.get("vehicle_id"),
+    )
+    result["shop"] = shop_links(
+        body.message,
+        result.get("retrieved") or {},
+        vehicle,
+        result.get("answer") or "",
     )
     message_id = _store_turn(session_id, body.message, result)
     log.info("chat ok source=%s", (resolved.get("decoded") or {}).get("source"))
-    return session_id, result, public_vehicle(resolved.get("decoded")), find_vins(body.message), message_id
+    return session_id, result, vehicle, find_vins(body.message), message_id
 
 
 @app.post("/api/chat")
@@ -397,10 +410,11 @@ def chat(body: ChatIn, request: Request, user: dict | None = Depends(current_use
         "answer": result["answer"],
         "refused": result["refused"],
         "mode": result["retrieved"]["mode"],
-        "citations": _citations(result),
+        "citations": _cited(result, body.message),
         "detected_vins": detected,
         "vehicle": vehicle,
         "model": result.get("model"),
+        "shop": result.get("shop"),
     }
 
 
@@ -414,9 +428,10 @@ def chat_stream(body: ChatIn, request: Request, user: dict | None = Depends(curr
             "message_id": message_id,
             "answer": result["answer"],
             "refused": result["refused"],
-            "citations": _citations(result),
+            "citations": _cited(result, body.message),
             "detected_vins": detected,
             "vehicle": vehicle,
+            "shop": result.get("shop"),
         }
         yield f"event: answer\ndata: {json.dumps(payload)}\n\n"
         yield "event: done\ndata: {}\n\n"

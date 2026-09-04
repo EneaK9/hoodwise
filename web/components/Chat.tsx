@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import type { ChatMessage, Citation } from "@/lib/types";
+import type { ChatMessage, Citation, ShopLinks } from "@/lib/types";
 import { AnswerCard } from "./AnswerCards";
 
 type VehicleInfo = {
@@ -131,6 +131,7 @@ export function Chat() {
           content: res.answer,
           citations: res.citations as Citation[],
           vehicle: res.vehicle,
+          shop: (res.shop as ShopLinks | null) || null,
         },
       ]);
     } catch (err) {
@@ -159,6 +160,7 @@ export function Chat() {
               answer={m.content}
               citations={m.citations || []}
               vehicleLabel={m.vehicle?.label || vehicle?.label}
+              shop={m.shop}
             />
           ),
         )}

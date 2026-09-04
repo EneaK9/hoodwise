@@ -55,6 +55,16 @@ export type ChatResponse = {
   detected_vins: string[];
   vehicle?: VehicleInfo | null;
   model?: string | null;
+  shop?: ShopLinks | null;
+};
+
+export type ShopLink = { name: string; url: string };
+
+export type ShopLinks = {
+  spec: string;
+  query: string;
+  note: string;
+  links: ShopLink[];
 };
 
 export type Variant = {
@@ -78,4 +88,5 @@ export type ChatMessage = {
   content: string;
   citations?: Citation[];
   vehicle?: VehicleInfo | null;
+  shop?: ShopLinks | null;
 };
