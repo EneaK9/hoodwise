@@ -1,0 +1,1 @@
+"""Hoodwise manual ingestion pipeline."""

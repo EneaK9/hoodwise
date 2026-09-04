@@ -1,0 +1,21 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+data/
+output/
+*.log
+node_modules/
+web/.next/
+web/out/
+web/.turbo/
+.DS_Store
+FC&FK Service Manual/
+Hyundai Owners Manuals/
+dist/
+.coverage
+htmlcov/

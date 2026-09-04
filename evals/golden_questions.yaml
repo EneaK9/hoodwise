@@ -1,0 +1,227 @@
+# Golden eval set — numbers verified against FC/FK factory manual text layer.
+questions:
+  - id: brake-hose-except-typer
+    question: What is the front brake hose banjo bolt torque except Type-R?
+    category: torque
+    expected_value_raw: "35 N·m"
+    expected_substring: "35"
+    variant_hint: except Type-R
+  - id: bleed-except-si
+    question: What is the front bleed screw torque except Si?
+    category: torque
+    expected_value_raw: "8.4 N·m"
+    expected_substring: "8.4"
+    variant_hint: except Si
+  - id: bleed-si
+    question: What is the bleed screw torque on the Si front caliper?
+    category: torque
+    expected_value_raw: "8.5 N·m"
+    expected_substring: "8.5"
+    variant_hint: Si
+  - id: typer-brake-line
+    question: What is the Type-R front brake line flare nut torque?
+    category: torque
+    expected_value_raw: "15 N·m"
+    expected_substring: "15"
+    variant_hint: Type-R
+  - id: typer-bleed
+    question: What is the Type-R front bleed screw torque?
+    category: torque
+    expected_value_raw: "14 N·m"
+    expected_substring: "14"
+    variant_hint: Type-R
+  - id: rear-brake-hose
+    question: What is the rear brake caliper hose banjo bolt torque?
+    category: torque
+    expected_value_raw: "35 N·m"
+    expected_substring: "35"
+  - id: rear-bleed
+    question: What is the rear brake bleed screw torque?
+    category: torque
+    expected_value_raw: "17 N·m"
+    expected_substring: "17"
+  - id: hose-to-line
+    question: What is the brake hose to brake line flare nut torque?
+    category: torque
+    expected_value_raw: "15 N·m"
+    expected_substring: "15"
+  - id: master-cylinder-line
+    question: What is the master cylinder brake line flare nut torque?
+    category: torque
+    expected_value_raw: "22 N·m"
+    expected_substring: "22"
+  - id: vsa-10mm
+    question: What is the VSA modulator 10 mm brake line nut torque?
+    category: torque
+    expected_value_raw: "15 N·m"
+    expected_substring: "15"
+  - id: vsa-12mm
+    question: What is the VSA modulator 12 mm brake line nut torque?
+    category: torque
+    expected_value_raw: "22 N·m"
+    expected_substring: "22"
+  - id: axle-15
+    question: What is the axle nut torque for a 1.5 L engine Civic?
+    category: torque
+    expected_value_raw: "245 N·m"
+    expected_substring: "245"
+    variant_hint: 1.5L
+  - id: axle-20
+    question: What is the axle nut torque for a 2.0 L engine Civic?
+    category: torque
+    expected_value_raw: "181 N·m"
+    expected_substring: "181"
+    variant_hint: 2.0L
+  - id: cam-first-pass
+    question: What is the first-pass camshaft holder bolt torque?
+    category: torque
+    expected_value_raw: "5.0 N·m"
+    expected_substring: "5.0"
+  - id: cam-final
+    question: What is the specified torque for camshaft holder bolts after the first pass?
+    category: torque
+    expected_value_raw: "18 N·m"
+    expected_substring: "18"
+  - id: vtc-actuator
+    question: What is the VTC actuator mounting bolt specified torque?
+    category: torque
+    expected_value_raw: "115 N·m"
+    expected_substring: "115"
+  - id: oil-filter
+    question: What is the oil filter tightening torque?
+    category: torque
+    expected_value_raw: "12 N·m"
+    expected_substring: "12"
+  - id: oil-filter-turn
+    question: How much extra turn after oil filter torque?
+    category: procedure
+    expected_substring: "3/4"
+  - id: connecting-rod
+    question: What is the connecting rod cap bolt torque sequence?
+    category: torque
+    expected_value_raw: "13 N·m"
+    expected_substring: "13"
+  - id: connecting-rod-angle
+    question: What additional angle is specified after connecting rod cap torque?
+    category: torque
+    expected_substring: "90"
+  - id: minder-reset-hold
+    question: How long do you hold Source/Enter to enter Maintenance Reset?
+    category: procedure
+    expected_substring: "10 seconds"
+  - id: minder-vehicle-stopped
+    question: Must the vehicle be stopped to reset Maintenance Minder?
+    category: procedure
+    expected_substring: "stopped"
+  - id: minder-oil-life-soon
+    question: At what remaining oil life does Maintenance Due Soon appear?
+    category: procedure
+    expected_substring: "15 %"
+  - id: minder-due-now
+    question: At what remaining oil life does Maintenance Due Now appear?
+    category: procedure
+    expected_substring: "5 %"
+  - id: minder-past-due
+    question: When does Maintenance Past Due appear?
+    category: procedure
+    expected_substring: "0 %"
+  - id: minder-reset-result
+    question: What does engine oil life reset to after Maintenance Minder reset?
+    category: procedure
+    expected_substring: "100 %"
+  - id: battery-setting-plate
+    question: What should you avoid when tightening the 12 volt battery setting plate nuts?
+    category: procedure
+    expected_substring: "over-tightening"
+  - id: battery-impacts
+    question: Why should you avoid dropping the 12 volt battery?
+    category: procedure
+    expected_substring: "electrolyte"
+  - id: battery-canada
+    question: After reconnecting the battery on Canada models, what should you do when first turning ON?
+    category: procedure
+    expected_substring: "brake pedal"
+  - id: battery-sensor-mode
+    question: What vehicle mode is required before removing the 12 volt battery sensor?
+    category: procedure
+    expected_substring: "OFF"
+  - id: battery-sensor-connector
+    question: How should you not hold the battery sensor when removing the terminal?
+    category: procedure
+    expected_substring: "connector"
+  - id: catalytic-inspect
+    question: How do you visually inspect the three-way catalytic converter catalyst?
+    category: procedure
+    expected_substring: "flashlight"
+  - id: refuse-bmw
+    question: What is the lug nut torque on a BMW E46?
+    category: refuse
+    expect_refuse: true
+  - id: refuse-made-up
+    question: What is the warp drive coolant pressure on a Civic Type-R?
+    category: refuse
+    expect_refuse: true
+  - id: brake-hose-lbf
+    question: What is the front brake hose torque in lbf·ft except Type-R?
+    category: torque
+    expected_substring: "26"
+  - id: axle-15-lbf
+    question: What is the 1.5 L axle nut torque in lbf·ft?
+    category: torque
+    expected_substring: "181"
+  - id: axle-20-lbf
+    question: What is the 2.0 L axle nut torque in lbf·ft?
+    category: torque
+    expected_substring: "133"
+  - id: vtc-lbf
+    question: What is the VTC actuator torque in lbf·ft?
+    category: torque
+    expected_substring: "85"
+  - id: oil-filter-lbf
+    question: What is the oil filter torque in lbf·ft?
+    category: torque
+    expected_substring: "9"
+  - id: master-lbf
+    question: Master cylinder flare nut torque in lbf·ft?
+    category: torque
+    expected_substring: "16"
+  - id: rear-bleed-lbf
+    question: Rear bleed screw torque in lbf·ft?
+    category: torque
+    expected_substring: "13"
+  - id: typer-line-lbf
+    question: Type-R brake line torque in lbf·ft?
+    category: torque
+    expected_substring: "11"
+  - id: cam-first-lbf
+    question: First-pass camshaft holder torque in lbf·ft?
+    category: torque
+    expected_substring: "3.7"
+  - id: safety-eye
+    question: When should you wear eye protection according to the service manual?
+    category: procedure
+    expected_substring: "eye"
+  - id: safety-engine-off
+    question: Should the engine be off before most servicing procedures?
+    category: procedure
+    expected_substring: "engine is off"
+  - id: symbols-torque
+    question: What units does the torque symbol use in this manual?
+    category: procedure
+    expected_substring: "N·m"
+  - id: minder-hds
+    question: Can Maintenance Minder items be reset with the HDS?
+    category: procedure
+    expected_substring: "HDS"
+  - id: battery-organic
+    question: What should you do if organic electrolyte is ingested?
+    category: procedure
+    expected_substring: "medical"
+  - id: brake-except-typer-kgf
+    question: Front brake hose torque in kgf·m except Type-R?
+    category: torque
+    expected_substring: "3.6"
+  - id: axle-15-kgf
+    question: 1.5 L axle nut torque in kgf·m?
+    category: torque
+    expected_substring: "25.0"
