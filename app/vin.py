@@ -294,6 +294,24 @@ def _wmi_only(vin: str) -> dict[str, Any]:
     }
 
 
+_DIESEL_RE = re.compile(
+    r"\b(diesel|crdi|tdi|cdti|dci|hdi|tdci|common[\s-]?rail)\b",
+    re.IGNORECASE,
+)
+_GAS_RE = re.compile(r"\b(gasoline|petrol|unleaded|gdi|t-?gdi)\b", re.IGNORECASE)
+
+
+def _fuel_from_text(text: str | None) -> str | None:
+    blob = text or ""
+    diesel = bool(_DIESEL_RE.search(blob))
+    gas = bool(_GAS_RE.search(blob))
+    if diesel and not gas:
+        return "diesel"
+    if gas and not diesel:
+        return "gasoline"
+    return None
+
+
 SPEC_SKIP_LABELS = {
     "vin",
     "vehicle id",
@@ -364,6 +382,14 @@ def from_vincario(payload: dict[str, Any]) -> dict[str, Any] | None:
         except ValueError:
             displacement_l = None
     engine_label = pairs.get("engine type") or pairs.get("engine")
+    fuel = _fuel_from_text(
+        " ".join(
+            str(pairs.get(k) or "")
+            for k in ("fuel type", "fuel", "engine type", "engine")
+        )
+    )
+    if engine_label and fuel and not re.search(r"\d", engine_label):
+        engine_label = f"{displacement_l}L" if displacement_l else engine_label
     if not engine_label and displacement_l:
         engine_label = f"{displacement_l}L"
     return {
@@ -375,6 +401,7 @@ def from_vincario(payload: dict[str, Any]) -> dict[str, Any] | None:
         "engine_code": pairs.get("engine code") or pairs.get("engine"),
         "engine_label": engine_label,
         "displacement_l": displacement_l,
+        "fuel": fuel or pairs.get("fuel type") or pairs.get("fuel"),
         "transmission": pairs.get("transmission"),
         "trim": pairs.get("trim") or pairs.get("series"),
         "body": pairs.get("body") or pairs.get("product type"),
@@ -406,6 +433,12 @@ def from_carsxe(payload: dict[str, Any]) -> dict[str, Any] | None:
         "engine_code": payload.get("engine") or payload.get("engine_model"),
         "engine_label": payload.get("engine") or payload.get("engine_model"),
         "displacement_l": payload.get("displacement") or payload.get("displacement_l"),
+        "fuel": payload.get("fuel_type") or payload.get("fuel") or _fuel_from_text(
+            " ".join(
+                str(payload.get(k) or "")
+                for k in ("fuel_type", "fuel", "engine", "engine_model")
+            )
+        ),
         "transmission": payload.get("transmission") or payload.get("transmission_style"),
         "trim": payload.get("trim") or payload.get("Trim"),
         "body": payload.get("body") or payload.get("body_class") or payload.get("style"),

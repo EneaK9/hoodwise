@@ -126,6 +126,7 @@ def test_vincario_payload_maps_make_model() -> None:
                 {"label": "Model Year", "value": "2016"},
                 {"label": "Body", "value": "SUV"},
                 {"label": "Engine Displacement (ccm)", "value": "1995"},
+                {"label": "Fuel Type", "value": "Diesel"},
                 {"label": "VIN", "value": "KMHSW81UBGU585399"},
             ]
         }
@@ -135,6 +136,7 @@ def test_vincario_payload_maps_make_model() -> None:
     assert decoded["model"] == "Santa Fe"
     assert decoded["year"] == 2016
     assert decoded["engine_label"] == "2.0L"
+    assert decoded["fuel"] == "diesel"
     assert any(s["label"] == "Engine Displacement (ccm)" for s in decoded["specs"])
     assert all(s["label"] != "VIN" for s in decoded["specs"])
     assert decode_is_complete(decoded)

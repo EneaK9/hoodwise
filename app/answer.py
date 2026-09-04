@@ -7,7 +7,7 @@ import re
 from typing import Any
 
 from app.config import settings
-from app.resolve import clean_part_name
+from app.resolve import apply_manual_fuel, clean_part_name
 from app.retrieval import retrieve
 
 DIGIT_RE = re.compile(r"\d+(?:\.\d+)?")
@@ -42,6 +42,10 @@ HARD RULES:
 - Owner manuals are not workshop manuals. If only an owner handbook was retrieved, say that.
 - Capacity tables mix fluids. A litre figure is engine oil only if that same snippet labels it engine oil (or API/ILSAC/ACEA engine oil). ATF / SP-IV / PSF / coolant / fuel / axle oil are not engine oil. Do not map a VIN 2.0L to an R2.0 transmission row.
 - If several engine variants are listed, quote each labeled engine-oil row. Do not pick one volume just because the displacement looks similar.
+- Match the pinned fuel and displacement. A 2.0 L VIN is not the 2.4 L gasoline row. If the book labels Diesel 2.0 / DPF, that is the oil row for a 2.0 L diesel.
+- If fuel is diesel, do not quote gasoline API SM / ILSAC / ACEA A5 as the required oil. Those grades belong only to a row the snippet labels gasoline (or For Europe gasoline). Do not attach them to a Diesel / DPF litre figure.
+- If fuel is unknown, quote the labeled gasoline and diesel oil rows separately. Do not pick one.
+- Do not invent litres, viscosity, or ACEA/API grades. Do not turn a US-quart conversion (e.g. 6.66 US qt) into a different litre figure.
 """
 
 
@@ -115,9 +119,18 @@ def _fluid_windows(retrieved: dict[str, Any]) -> list[str]:
 
 def _format_context(retrieved: dict[str, Any], vehicle: dict[str, Any] | None) -> str:
     lines = [f"PINNED VEHICLE: {json.dumps(vehicle) if vehicle else 'none'}"]
+    if vehicle and vehicle.get("fuel"):
+        lines.append(
+            f"PINNED FUEL: {vehicle['fuel']}. Quote only engine-oil rows labeled for this fuel."
+        )
+    if vehicle and vehicle.get("displacement_l"):
+        lines.append(
+            f"PINNED DISPLACEMENT: {vehicle['displacement_l']}L. "
+            "Do not use a different engine's oil row."
+        )
     lines.append(
         "TABLE NOTE: retrieved pages may list engine oil, ATF, coolant, and fuel together. "
-        "Only a volume labeled engine oil / API SM / ILSAC / ACEA is an oil fill."
+        "Only a volume labeled engine oil / API / ILSAC / ACEA / DPF diesel oil is an oil fill."
     )
     windows = _fluid_windows(retrieved)
     if windows:
@@ -214,6 +227,7 @@ def generate_answer(
 ) -> dict[str, Any]:
     retrieved = retrieve(question, variant_id, hints=hints, vehicle_id=vehicle_id)
     retrieved["specs"] = _dedupe_specs(retrieved["specs"], limit=2)
+    apply_manual_fuel(vehicle, retrieved)
     mentioned = FOREIGN_MAKE.search(question)
     pinned_make = str((vehicle or {}).get("make") or "").lower()
     if mentioned:

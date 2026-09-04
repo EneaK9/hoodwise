@@ -199,7 +199,12 @@ def _rrf(keyword: list[dict], vector: list[dict], k: int = 60, limit: int = 8) -
     return out
 
 
-def search_chunks(question: str, limit: int = 8, vehicle_id: str | None = None) -> list[dict[str, Any]]:
+def search_chunks(
+    question: str,
+    limit: int = 8,
+    vehicle_id: str | None = None,
+    hints: list[str] | None = None,
+) -> list[dict[str, Any]]:
     keyword = _keyword_chunks(question, limit=12, vehicle_id=vehicle_id)
     vector = _vector_chunks(question, limit=12, vehicle_id=vehicle_id)
     if not vector:
@@ -209,7 +214,9 @@ def search_chunks(question: str, limit: int = 8, vehicle_id: str | None = None) 
     else:
         merged = _rrf(keyword, vector, limit=limit)
     if _is_capacity_query(question):
-        merged = _prefer_capacity_chunks(merged, vehicle_id=vehicle_id, limit=limit)
+        merged = _prefer_capacity_chunks(
+            merged, vehicle_id=vehicle_id, limit=limit, hints=hints
+        )
     return merged
 
 
@@ -288,10 +295,42 @@ def _chunks_on_pages(
     )
 
 
+def score_capacity_chunk(text: str, hints: list[str] | None = None) -> int:
+    hints = hints or []
+    score = 3
+    diesel_row = bool(re.search(r"\b(diesel|dpf|crdi)\b", text, re.I))
+    gas_row = bool(re.search(r"\b(gasoline|petrol)\b", text, re.I))
+    if re.search(r"engine oil", text, re.I):
+        score += 6
+    if re.search(r"API Service|ILSAC|ACEA", text, re.I):
+        score += 3
+    if re.search(r"lubricant", text, re.I):
+        score += 1
+    if diesel_row:
+        score += 4
+    if "diesel" in hints:
+        if diesel_row:
+            score += 8
+        elif gas_row:
+            score -= 6
+    if "gasoline" in hints:
+        if gas_row:
+            score += 8
+        elif diesel_row:
+            score -= 6
+    if "2.0" in hints:
+        if diesel_row:
+            score += 4
+        if re.search(r"2\.4\s*l", text, re.I) and not re.search(r"2\.0", text, re.I):
+            score -= 3
+    return score
+
+
 def _prefer_capacity_chunks(
     chunks: list[dict[str, Any]],
     vehicle_id: str | None,
     limit: int,
+    hints: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     volume_hits = _capacity_chunks(vehicle_id)
     pages = sorted({int(row["page_number"]) for row in volume_hits if row.get("page_number") is not None})
@@ -304,13 +343,7 @@ def _prefer_capacity_chunks(
         has_vol = bool(LITRE_RE.search(text) or re.search(r"US qt", text, re.I))
         if not has_vol:
             continue
-        score = 3
-        if re.search(r"engine oil", text, re.I):
-            score += 6
-        if re.search(r"API Service|ILSAC|ACEA", text, re.I):
-            score += 3
-        if re.search(r"lubricant", text, re.I):
-            score += 1
+        score = score_capacity_chunk(text, hints or [])
         scored.append((score, row))
     scored.sort(key=lambda item: item[0], reverse=True)
     preferred = [row for _, row in scored[:limit]]
@@ -326,6 +359,6 @@ def retrieve(
     numeric = is_numeric_query(question)
     specs = lookup_specs(question, variant_id, limit=8 if numeric else 4, vehicle_id=vehicle_id)
     specs = filter_specs_for_hints(specs, hints or [])
-    chunks = search_chunks(question, vehicle_id=vehicle_id)
+    chunks = search_chunks(question, vehicle_id=vehicle_id, hints=hints)
     mode = "sql_spec" if numeric and specs else "hybrid"
     return {"mode": mode, "numeric": numeric, "specs": specs, "chunks": chunks}

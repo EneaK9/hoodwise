@@ -18,6 +18,7 @@ export type VehicleInfo = {
   trim?: string | null;
   body?: string | null;
   engine_label?: string | null;
+  fuel?: string | null;
   transmission?: string | null;
   label?: string | null;
   variant_id?: string | null;
@@ -64,6 +65,7 @@ export type ShopLinks = {
   spec: string;
   query: string;
   note: string;
+  source?: "manual" | "web" | "search";
   links: ShopLink[];
 };
 

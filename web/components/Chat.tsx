@@ -149,7 +149,7 @@ export function Chat() {
             Tap the car icon, drop in a VIN, then ask. Hoodwise looks up the exact car and answers from the factory manual.
           </div>
         )}
-        {messages.map((m) =>
+        {messages.map((m, idx) =>
           m.role === "user" ? (
             <div key={m.id} className="self-end rounded-2xl bg-ink px-4 py-2 text-sm text-paper">
               {m.content}
@@ -161,6 +161,7 @@ export function Chat() {
               citations={m.citations || []}
               vehicleLabel={m.vehicle?.label || vehicle?.label}
               shop={m.shop}
+              question={[...messages.slice(0, idx)].reverse().find((row) => row.role === "user")?.content}
             />
           ),
         )}

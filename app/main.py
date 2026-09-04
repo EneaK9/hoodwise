@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from uuid import UUID
 
@@ -12,7 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.answer import generate_answer
 from app.shop import shop_links
-from app.snippets import attach_snippets
+from app.snippets import attach_snippets, render_snippet, snippet_needles
 from app.resolve import public_vehicle, resolve_vehicle
 from app.auth import (
     COOKIE_NAME,
@@ -390,12 +391,15 @@ def _run_chat(body: ChatIn, request: Request, user: dict | None) -> tuple[str, d
         vehicle=vehicle,
         vehicle_id=resolved.get("vehicle_id"),
     )
-    result["shop"] = shop_links(
-        body.message,
-        result.get("retrieved") or {},
-        vehicle,
-        result.get("answer") or "",
-    )
+    if result.get("refused"):
+        result["shop"] = None
+    else:
+        result["shop"] = shop_links(
+            body.message,
+            result.get("retrieved") or {},
+            vehicle,
+            result.get("answer") or "",
+        )
     message_id = _store_turn(session_id, body.message, result)
     log.info("chat ok source=%s", (resolved.get("decoded") or {}).get("source"))
     return session_id, result, vehicle, find_vins(body.message), message_id
@@ -437,6 +441,23 @@ def chat_stream(body: ChatIn, request: Request, user: dict | None = Depends(curr
         yield "event: done\ndata: {}\n\n"
 
     return StreamingResponse(events(), media_type="text/event-stream")
+
+
+@app.get("/api/manual/{doc_id}/page/{page_number}")
+def manual_page(doc_id: str, page_number: int, q: str = "") -> FileResponse:
+    if not re.fullmatch(r"[A-Za-z0-9_]{3,80}", doc_id):
+        raise HTTPException(status_code=404, detail="Not found")
+    if page_number < 1 or page_number > 2000:
+        raise HTTPException(status_code=404, detail="Not found")
+    needles = snippet_needles(q, "") if q else []
+    path = render_snippet(doc_id, page_number, needles)
+    if not path:
+        raise HTTPException(status_code=404, detail="Not found")
+    target = Path(path).resolve()
+    root = Path(settings.data_dir).resolve()
+    if not str(target).startswith(str(root)) or not target.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    return FileResponse(target)
 
 
 @app.get("/api/images/{path:path}")

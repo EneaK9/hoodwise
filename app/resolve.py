@@ -10,6 +10,8 @@ from app.vin import decode_vin, find_vins
 HINT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("typer", re.compile(r"type-?r", re.I)),
     ("si", re.compile(r"\bsi\b", re.I)),
+    ("diesel", re.compile(r"\b(diesel|crdi|tdi|cdti|dci|hdi|tdci)\b", re.I)),
+    ("gasoline", re.compile(r"\b(gasoline|petrol|gdi|t-?gdi)\b", re.I)),
     ("1.5", re.compile(r"1\.5|l15", re.I)),
     ("2.0", re.compile(r"2\.0|k20", re.I)),
 ]
@@ -40,14 +42,65 @@ def infer_hints_from_text(text: str) -> list[str]:
     return hints
 
 
+def apply_manual_fuel(vehicle: dict[str, Any] | None, retrieved: dict[str, Any] | None) -> None:
+    """If the VIN has no fuel, pin it when a labeled oil row matches displacement."""
+    if not vehicle or not retrieved:
+        return
+    if vehicle.get("fuel") in {"diesel", "gasoline"}:
+        return
+    text = "\n".join(
+        str(chunk.get("content") or "") for chunk in retrieved.get("chunks") or []
+    )
+    disp = str(vehicle.get("displacement_l") or vehicle.get("engine_label") or "")
+    disp_m = re.search(r"(\d+\.\d+)", disp)
+    if not disp_m or not re.search(r"\bdiesel\b", text, re.I):
+        return
+    num = re.escape(disp_m.group(1))
+    labeled = bool(re.search(rf"diesel.{{0,80}}{num}|{num}\s*/\s*\d+\.\d+", text, re.I))
+    dpf_row = bool(re.search(r"diesel engine with dpf", text, re.I))
+    gas_same = bool(re.search(rf"gasoline.{{0,40}}{num}", text, re.I))
+    if not ((labeled or dpf_row) and not gas_same):
+        return
+    vehicle["fuel"] = "diesel"
+    label = vehicle.get("label") or ""
+    if label and "diesel" not in label.lower():
+        vehicle["label"] = f"{label} diesel"
+
+
+def infer_fuel(decoded: dict[str, Any] | None) -> str | None:
+    if not decoded:
+        return None
+    from app.vin import _fuel_from_text
+
+    explicit = decoded.get("fuel")
+    if explicit in {"diesel", "gasoline"}:
+        return explicit
+    if isinstance(explicit, str):
+        hit = _fuel_from_text(explicit)
+        if hit:
+            return hit
+    bits = [
+        str(decoded.get(k) or "")
+        for k in ("fuel", "engine_label", "engine_code", "trim")
+    ]
+    for spec in decoded.get("specs") or []:
+        bits.append(str(spec.get("label") or ""))
+        bits.append(str(spec.get("value") or ""))
+    return _fuel_from_text(" ".join(bits))
+
+
 def infer_hints_from_decode(decoded: dict[str, Any] | None) -> list[str]:
     if not decoded:
         return []
     blob = " ".join(
         str(decoded.get(k) or "")
-        for k in ("engine_label", "engine_code", "trim", "transmission", "body")
+        for k in ("fuel", "engine_label", "engine_code", "trim", "transmission", "body")
     )
-    return infer_hints_from_text(blob)
+    hints = infer_hints_from_text(blob)
+    fuel = infer_fuel(decoded)
+    if fuel and fuel not in hints:
+        hints.append(fuel)
+    return hints
 
 
 def vehicle_label(decoded: dict[str, Any] | None) -> str | None:
@@ -60,9 +113,11 @@ def vehicle_label(decoded: dict[str, Any] | None) -> str | None:
         str(decoded.get("trim") or ""),
         str(decoded.get("body") or "").split("/")[0],
         str(decoded.get("engine_label") or ""),
+        str(infer_fuel(decoded) or decoded.get("fuel") or ""),
         str(decoded.get("transmission") or ""),
     ]
-    label = " ".join(b for b in bits if b and b != "None").strip()
+    skip = {"none", "any", "n/a", "unknown", "null"}
+    label = " ".join(b for b in bits if b and b.lower() not in skip).strip()
     if label and not decoded.get("model"):
         label = f"{label} (model unconfirmed)"
     return label or None
@@ -104,6 +159,9 @@ def public_vehicle(decoded: dict[str, Any] | None) -> dict[str, Any] | None:
     if not decoded:
         return None
     decoded = _enrich_from_variant(dict(decoded))
+    fuel = infer_fuel(decoded)
+    if fuel:
+        decoded["fuel"] = fuel
     return {
         "year": decoded.get("year"),
         "make": decoded.get("make"),
@@ -112,6 +170,7 @@ def public_vehicle(decoded: dict[str, Any] | None) -> dict[str, Any] | None:
         "body": decoded.get("body"),
         "engine_label": decoded.get("engine_label"),
         "engine_code": decoded.get("engine_code"),
+        "fuel": fuel,
         "transmission": decoded.get("transmission"),
         "variant_id": decoded.get("variant_id"),
         "source": decoded.get("source"),

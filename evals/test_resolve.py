@@ -1,11 +1,20 @@
 from app.answer import _fluid_windows
-from app.resolve import clean_part_name, infer_hints_from_decode, infer_hints_from_text
+from app.resolve import (
+    apply_manual_fuel,
+    clean_part_name,
+    infer_fuel,
+    infer_hints_from_decode,
+    infer_hints_from_text,
+    public_vehicle,
+    vehicle_label,
+)
 from app.retrieval import (
     _is_capacity_query,
     _keywords,
     _merge_page_chunks,
     _ts_or_query,
     filter_specs_for_hints,
+    score_capacity_chunk,
 )
 
 
@@ -25,6 +34,48 @@ def test_hints_from_question() -> None:
 def test_hints_from_decode() -> None:
     hints = infer_hints_from_decode({"engine_label": "1.5T", "trim": "EX-L"})
     assert "1.5" in hints
+
+
+def test_diesel_hint_from_decode() -> None:
+    hints = infer_hints_from_decode({"engine_label": "2.0L CRDi", "fuel": "diesel"})
+    assert "diesel" in hints
+    assert "2.0" in hints
+    assert infer_fuel({"specs": [{"label": "Fuel Type", "value": "Diesel"}]}) == "diesel"
+    pub = public_vehicle({"year": 2016, "make": "Hyundai", "model": "Santa Fe", "engine_label": "2.0L", "fuel": "diesel"})
+    assert pub is not None
+    assert pub["fuel"] == "diesel"
+    assert "diesel" in (vehicle_label({"year": 2016, "make": "Hyundai", "model": "Santa Fe", "engine_label": "2.0L", "fuel": "diesel"}) or "").lower()
+
+
+def test_pin_diesel_when_manual_has_matching_row() -> None:
+    vehicle = {"engine_label": "2.0L", "displacement_l": "2.0", "label": "2016 Hyundai Santa Fe 2.0L"}
+    apply_manual_fuel(
+        vehicle,
+        {"chunks": [{"content": "Diesel Engine with DPF\nDiesel 2.0/2.2L\n6.3 l"}]},
+    )
+    assert vehicle["fuel"] == "diesel"
+    assert "diesel" in vehicle["label"].lower()
+    dpf_only = {"engine_label": "2.0L", "displacement_l": "2.0", "label": "2016 Hyundai Santa Fe 2.0L"}
+    apply_manual_fuel(dpf_only, {"chunks": [{"content": "Diesel Engine with DPF *6\n6.3 l (6.66 US qt.)"}]})
+    assert dpf_only["fuel"] == "diesel"
+    gas_24 = {"engine_label": "2.4L", "displacement_l": "2.4", "label": "2016 Hyundai Santa Fe 2.4L"}
+    apply_manual_fuel(
+        gas_24,
+        {"chunks": [{"content": "Gasoline 2.4L\n4.8 l\nDiesel Engine with DPF\n6.3 l"}]},
+    )
+    assert gas_24.get("fuel") is None
+
+
+def test_diesel_capacity_outranks_gasoline_europe_row() -> None:
+    gas = score_capacity_chunk(
+        "(For Europe)\n4.8 l (5.07 US qt.)\nAPI Service SM, ILSAC GF-4 or above",
+        ["2.0", "diesel"],
+    )
+    diesel = score_capacity_chunk(
+        "Diesel Engine with DPF *6\n6.3 l (6.66 US qt.)",
+        ["2.0", "diesel"],
+    )
+    assert diesel > gas
 
 
 def test_filter_drops_except_typer_when_car_is_typer() -> None:
