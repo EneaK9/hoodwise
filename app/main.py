@@ -12,9 +12,11 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.answer import generate_answer
+from app.clarify import clarification
+from app.intent import part_kind
 from app.shop import shop_links
 from app.snippets import attach_snippets, render_snippet, snippet_needles
-from app.resolve import public_vehicle, resolve_vehicle
+from app.resolve import model_year_ranges, public_vehicle, resolve_vehicle
 from app.auth import (
     COOKIE_NAME,
     create_user,
@@ -27,8 +29,8 @@ from app.auth import (
 from app.config import settings
 from app.db import fetch_all, fetch_one, get_conn
 from app.ratelimit import limit_chat, limit_vin
-from app.schemas import ChatIn, LoginIn, SessionClaimIn, SignupIn, VehiclePickIn, VinIn
-from app.vin import decode_vin, find_vins
+from app.schemas import ChatIn, LoginIn, SessionClaimIn, SignupIn, VehiclePickIn, VinFuelIn, VinIn
+from app.vin import decode_vin, find_vins, set_vin_fuel
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -168,6 +170,20 @@ def vin_decode(body: VinIn, request: Request) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid VIN") from exc
     log.info("vin decoded source=%s confidence=%s", decoded.get("source"), decoded.get("confidence"))
+    pub = public_vehicle(decoded) or {}
+    return {"decode": {**decoded, **pub}}
+
+
+@app.post("/api/vin/fuel")
+def vin_fuel(body: VinFuelIn, request: Request) -> dict:
+    """The owner confirms petrol or diesel when no decoder could. Stored on the VIN."""
+    limit_vin(request)
+    try:
+        decoded = set_vin_fuel(body.vin, body.fuel)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid VIN") from exc
+    if not decoded:
+        raise HTTPException(status_code=404, detail="VIN not decoded")
     pub = public_vehicle(decoded) or {}
     return {"decode": {**decoded, **pub}}
 
@@ -379,17 +395,54 @@ def _cited(result: dict, question: str) -> list[dict]:
     return attach_snippets(_citations(result), question, result.get("answer") or "", result.get("retrieved") or {})
 
 
-def _run_chat(body: ChatIn, request: Request, user: dict | None) -> tuple[str, dict, dict | None, list[str]]:
+def _previous_user_message(session_id: str | None, turns: int = 3) -> str:
+    """Recent user turns, oldest first. Clarification replies ("2016", "diesel") only make
+    sense together with the question that came before them."""
+    if not session_id:
+        return ""
+    rows = fetch_all(
+        """
+        SELECT content FROM messages
+         WHERE session_id = %s AND role = 'user'
+         ORDER BY created_at DESC LIMIT %s
+        """,
+        (session_id, turns),
+    )
+    return " | ".join((r.get("content") or "").strip() for r in reversed(rows) if r.get("content"))
+
+
+def _clarify_result(ask: dict, kind: str) -> dict:
+    return {
+        "answer": ask["ask"],
+        "refused": False,
+        "clarify": {"missing": ask["missing"], "options": ask["options"]},
+        "retrieved": {"mode": "clarify", "numeric": False, "specs": [], "chunks": [], "kind": kind},
+        "model": None,
+        "shop": None,
+    }
+
+
+def _run_chat(body: ChatIn, request: Request, user: dict | None) -> tuple[str, dict, dict | None, list[str], str]:
     limit_chat(request)
-    resolved = resolve_vehicle(body.message, body.vin, _session_vin(body.session_id))
+    context = _previous_user_message(body.session_id)
+    kind = part_kind(body.message, context)
+    resolved = resolve_vehicle(body.message, body.vin, _session_vin(body.session_id), context=context)
     session_id = _ensure_session(body, user, resolved.get("variant_id") or body.variant_id, resolved.get("vin"))
     vehicle = public_vehicle(resolved.get("decoded"))
+    ask = clarification(body.message, vehicle, kind, context, year_ranges=model_year_ranges)
+    if ask:
+        result = _clarify_result(ask, kind)
+        message_id = _store_turn(session_id, body.message, result)
+        log.info("chat clarify missing=%s kind=%s", ask["missing"], kind or "-")
+        return session_id, result, vehicle, find_vins(body.message), message_id
     result = generate_answer(
         body.message,
         resolved.get("variant_id") or body.variant_id,
         hints=resolved.get("hints") or [],
         vehicle=vehicle,
         vehicle_id=resolved.get("vehicle_id"),
+        kind=kind,
+        context=context,
     )
     if result.get("refused"):
         result["shop"] = None
@@ -399,9 +452,15 @@ def _run_chat(body: ChatIn, request: Request, user: dict | None) -> tuple[str, d
             result.get("retrieved") or {},
             vehicle,
             result.get("answer") or "",
+            context=context,
         )
     message_id = _store_turn(session_id, body.message, result)
-    log.info("chat ok source=%s", (resolved.get("decoded") or {}).get("source"))
+    log.info(
+        "chat ok source=%s kind=%s fuel=%s",
+        (resolved.get("decoded") or {}).get("source"),
+        kind or "-",
+        (vehicle or {}).get("fuel") or "-",
+    )
     return session_id, result, vehicle, find_vins(body.message), message_id
 
 
@@ -419,6 +478,8 @@ def chat(body: ChatIn, request: Request, user: dict | None = Depends(current_use
         "vehicle": vehicle,
         "model": result.get("model"),
         "shop": result.get("shop"),
+        "clarify": result.get("clarify"),
+        "needs_fuel": bool(result.get("needs_fuel")) or bool((vehicle or {}).get("needs_fuel_confirmation")),
     }
 
 
@@ -436,6 +497,8 @@ def chat_stream(body: ChatIn, request: Request, user: dict | None = Depends(curr
             "detected_vins": detected,
             "vehicle": vehicle,
             "shop": result.get("shop"),
+            "clarify": result.get("clarify"),
+            "needs_fuel": bool(result.get("needs_fuel")) or bool((vehicle or {}).get("needs_fuel_confirmation")),
         }
         yield f"event: answer\ndata: {json.dumps(payload)}\n\n"
         yield "event: done\ndata: {}\n\n"

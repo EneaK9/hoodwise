@@ -11,6 +11,10 @@ type VehicleInfo = {
   make?: string | null;
   model?: string | null;
   engine_label?: string | null;
+  engine_family?: string | null;
+  fuel?: string | null;
+  fuel_source?: string | null;
+  needs_fuel_confirmation?: boolean;
   transmission?: string | null;
   trim?: string | null;
   note?: string | null;
@@ -34,6 +38,13 @@ type VehicleInfo = {
   } | null;
 };
 
+const FUEL_SOURCE_LABEL: Record<string, string> = {
+  user: "confirmed by you",
+  "engine-size": "from engine size",
+  emissions: "from CO2 vs consumption",
+  manual: "from the manual's engine table",
+};
+
 const VIN_SOURCE_LABEL: Record<string, string> = {
   vpic: "NHTSA vPIC",
   vincario: "Vincario",
@@ -41,6 +52,7 @@ const VIN_SOURCE_LABEL: Record<string, string> = {
   api_ninjas: "API Ninjas",
   pattern: "Civic VIN pattern",
   wmi: "manufacturer code only",
+  text: "from your message, no VIN",
 };
 
 function VinIcon({ active }: { active: boolean }) {
@@ -69,11 +81,52 @@ export function Chat() {
   const [vin, setVin] = useState("");
   const [vehicle, setVehicle] = useState<VehicleInfo | null>(null);
   const [vinError, setVinError] = useState<string | null>(null);
+  const [fuelBusy, setFuelBusy] = useState(false);
   const vinRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (vinOpen) vinRef.current?.focus();
   }, [vinOpen]);
+
+  async function pickFuel(fuel: "diesel" | "gasoline") {
+    if (!vin || fuelBusy) return;
+    setFuelBusy(true);
+    try {
+      const res = await api.setFuel(vin, fuel);
+      const d = res.decode as VehicleInfo;
+      setVehicle({ ...d, specs: d.specs || [] });
+    } catch (err) {
+      setVinError(err instanceof Error ? err.message : "Could not save fuel");
+    } finally {
+      setFuelBusy(false);
+    }
+  }
+
+  const askFuel = Boolean(vin && vehicle && vehicle.needs_fuel_confirmation);
+
+  const fuelPrompt = askFuel ? (
+    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-rust/30 bg-rust/5 px-3 py-2 text-xs text-ink">
+      <span>
+        The VIN data does not say whether this {vehicle?.engine_label || "engine"} is petrol or diesel. Oil specs differ. Which is it?
+      </span>
+      <button
+        type="button"
+        disabled={fuelBusy}
+        onClick={() => void pickFuel("gasoline")}
+        className="rounded-full border border-black/15 bg-white px-3 py-1 hover:bg-black/5 disabled:opacity-50"
+      >
+        Petrol
+      </button>
+      <button
+        type="button"
+        disabled={fuelBusy}
+        onClick={() => void pickFuel("diesel")}
+        className="rounded-full border border-black/15 bg-white px-3 py-1 hover:bg-black/5 disabled:opacity-50"
+      >
+        Diesel
+      </button>
+    </div>
+  ) : null;
 
   async function lookupVin(value: string) {
     const cleaned = value.trim().toUpperCase();
@@ -132,6 +185,7 @@ export function Chat() {
           citations: res.citations as Citation[],
           vehicle: res.vehicle,
           shop: (res.shop as ShopLinks | null) || null,
+          clarify: res.clarify || null,
         },
       ]);
     } catch (err) {
@@ -154,6 +208,26 @@ export function Chat() {
             <div key={m.id} className="self-end rounded-2xl bg-ink px-4 py-2 text-sm text-paper">
               {m.content}
             </div>
+          ) : m.clarify ? (
+            <div key={m.id} className="self-start max-w-[85%] rounded-2xl border border-black/10 bg-white px-4 py-3 text-sm shadow-sm">
+              <p>{m.content}</p>
+              {m.clarify.options.length > 0 && idx === messages.length - 1 && (
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {m.clarify.options.map((opt) => (
+                    <li key={opt}>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void send(opt)}
+                        className="rounded-full border border-black/15 bg-white px-3 py-1 text-xs hover:bg-black/5 disabled:opacity-50"
+                      >
+                        {opt}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           ) : (
             <AnswerCard
               key={m.id}
@@ -167,6 +241,7 @@ export function Chat() {
         )}
       </div>
 
+      {fuelPrompt}
       {error && <p className="text-sm text-rust">{error}</p>}
 
       <form
@@ -210,6 +285,9 @@ export function Chat() {
               <p className="text-xs text-steel">
                 Decoded: {vehicle.label}
                 {vehicle.source ? ` · ${VIN_SOURCE_LABEL[vehicle.source] || vehicle.source}` : ""}
+                {vehicle.fuel && vehicle.fuel_source && vehicle.fuel_source !== "decoder"
+                  ? ` · fuel ${FUEL_SOURCE_LABEL[vehicle.fuel_source] || vehicle.fuel_source}`
+                  : ""}
               </p>
             )}
             {vehicle?.note && <p className="text-xs text-steel">{vehicle.note}</p>}

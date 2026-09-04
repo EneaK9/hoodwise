@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -20,6 +22,11 @@ class ChatIn(BaseModel):
 
 class VinIn(BaseModel):
     vin: str = Field(min_length=17, max_length=17)
+
+
+class VinFuelIn(BaseModel):
+    vin: str = Field(min_length=17, max_length=17)
+    fuel: Literal["diesel", "gasoline"]
 
 
 class VehiclePickIn(BaseModel):

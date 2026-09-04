@@ -37,6 +37,8 @@ export const api = {
     req<{ id: string }>("/api/garage", { method: "POST", body: JSON.stringify({ variant_id, nickname, vin }) }),
   decodeVin: (vin: string) =>
     req<{ decode: Record<string, unknown> }>("/api/vin/decode", { method: "POST", body: JSON.stringify({ vin }) }),
+  setFuel: (vin: string, fuel: "diesel" | "gasoline") =>
+    req<{ decode: Record<string, unknown> }>("/api/vin/fuel", { method: "POST", body: JSON.stringify({ vin, fuel }) }),
   chat: (payload: { session_id?: string; message: string; variant_id?: string; vin?: string }) =>
     req<ChatResponse>("/api/chat", { method: "POST", body: JSON.stringify(payload) }),
   sessions: () => req<{ sessions: Array<{ id: string; title: string; created_at: string }> }>("/api/sessions"),

@@ -49,6 +49,11 @@ def test_numbers_must_appear_in_citations() -> None:
     ok, missing = numbers_are_grounded("Tighten to 99 N·m.", retrieved)
     assert not ok
     assert "99" in missing
+    # The user's own year and engine size are not inventions.
+    ok, missing = numbers_are_grounded(
+        "For your 2016 2.0 diesel: 35 N·m.", retrieved, question="torque for my 2016 2.0 diesel"
+    )
+    assert ok and missing == []
 
 
 def test_refuse_questions_are_marked() -> None:

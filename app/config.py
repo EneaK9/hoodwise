@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     rate_limit_chat_per_min: int = 20
     rate_limit_vin_per_min: int = 30
 
+    # Retailer sites for shop links: "eu" (German sites, ship to the Balkans), "uk", or "us".
+    shop_region: str = "eu"
+
     # Optional global VIN APIs (NHTSA vPIC is always tried first; it is US-only).
     vincario_api_key: str = ""
     vincario_secret_key: str = ""

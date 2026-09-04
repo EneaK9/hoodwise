@@ -73,7 +73,11 @@ export function AnswerCard({
       {shop && shop.links.length > 0 && (
         <div className="border-t border-black/10 bg-black/[0.02] px-4 py-3">
           <p className="text-xs font-medium text-ink">
-            {shop.source === "web" ? "Type from the web — check these sites" : "Search this spec on working shop pages"}
+            {shop.source === "web"
+              ? `${shop.kind || "Part"} type from the web. Check these shops`
+              : shop.source === "manual"
+                ? `Search this ${shop.kind || "part"} spec on shops that answered`
+                : `Search this ${shop.kind || "part"} by car on shops that answered`}
           </p>
           <p className="mt-1 text-[11px] text-steel">{shop.note}</p>
           {shop.query && <p className="mt-1 font-mono text-[11px] text-ink">{shop.query}</p>}

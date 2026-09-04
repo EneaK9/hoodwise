@@ -1,69 +1,70 @@
-"""Exact-spec shopping searches. We do not scrape or pick a listing."""
+"""Shop search links for a part the manual named. Search pages only; we never pick a listing.
+
+Design:
+- The part category comes from the question (or the previous turn on follow-ups) via
+  app.intent, and the spec is extracted ONLY with that category's patterns. A bulb
+  question can never be answered with an oil grade.
+- Retailer URLs are built from an allowlist per region. A cached liveness check drops
+  hosts that are down or whose search path 404s. Bot walls (403) are not a failure, but
+  they also are not proof the listings match; the note says so.
+"""
 
 from __future__ import annotations
 
 import re
+import time
 from typing import Any
-from urllib.parse import parse_qs, urlparse, quote_plus
+from urllib.parse import parse_qs, quote_plus, urlparse
 
-SHOP_INTENT = re.compile(
-    r"light\s*bul[bd]s?|headlights?|\bbulbs?\b|\blamps?\b|\blights?\b|"
-    r"\bfog\b|\btire|\btyre|\boil\b|\bfilter|\bwiper|\bfluid|\bcoolant|"
-    r"\bbattery|\bfuse|\bwasher",
-    re.IGNORECASE,
-)
+from app.config import settings
+from app.intent import FLUID_KINDS, part_kind
+from app.resolve import manual_fuel_from_text
+
 SKIP_INTENT = re.compile(
-    r"\b(torque|tighten|nm|bleed|procedure|how tight)\b",
+    r"\b(torque|n[·.]?m|lbf|tighten|clearance|procedure|how to|steps?)\b",
     re.IGNORECASE,
 )
 BULB_RE = re.compile(
-    r"\b(H(?:1|3|4|7|8|9|11|13|15|16|27)|HB[34]|HIR2|900[56]|P21W|PY21W|"
-    r"W5W|W16W|T10|D[1-4]S|H8L)\b",
-    re.IGNORECASE,
+    r"\b(?:H\d{1,2}[A-Z]?|HB[345]|HIR2|D[1-4][SR]|PSX?2[46]W|P2[17]W|PY2[17]W|W5W|W16W|"
+    r"W21/?5W|WY5W|WY21W|C5W|C10W|T10|T20|T15|T4W|R5W|R10W|P21/?5W|H21W|PSY24W|"
+    r"PW24W|PWY24W|9005|9006|9012|9145|7443|7440|3157|3156|1156|1157|194|168|921)\b"
 )
-TIRE_RE = re.compile(r"\b\d{3}/\d{2}R\d{2}\b", re.IGNORECASE)
-VISCOSITY_RE = re.compile(r"\b(?:0W|5W|10W|15W|20W)[-/](?:20|30|40|50)\b", re.IGNORECASE)
+TIRE_RE = re.compile(r"\b\d{3}/\d{2}\s?Z?R\d{2}\b", re.IGNORECASE)
+VISCOSITY_RE = re.compile(r"\b(?:0W|5W|10W|15W|20W)[-/](?:16|20|30|40|50)\b", re.IGNORECASE)
 OIL_SPEC_RE = re.compile(
-    r"\b(?:API(?:\s+Service)?\s+S[LMNP](?:\s+PLUS)?|ILSAC\s+GF-\d|ACEA\s+(?:A[35]|B[34]|C[2-5]))\b",
+    r"\b(?:API(?:\s+Service)?\s+(?:S[LMNP](?:\s+PLUS)?|C[HIJK]-4|CK-4)|ILSAC\s+GF-\d|"
+    r"ACEA\s+(?:A[35]|B[34]|C[2-5]|A[35]/B[345]))\b",
     re.IGNORECASE,
 )
-GASOLINE_OIL_RE = re.compile(r"\b(?:ILSAC|API(?:\s+Service)?\s+S[LM])\b", re.IGNORECASE)
-ATF_RE = re.compile(r"\b(?:ATF\s+SP-?IV|SP-?IV|PSF-4)\b", re.IGNORECASE)
-SAFE_QUERY = re.compile(r"[^A-Za-z0-9./\-\s]+")
-FLUID_KINDS = {"engine oil", "coolant", "ATF"}
-PROBE_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml",
-}
-
-# First working URL per retailer is kept. autodoc.al is dead (connection refused).
-SITES: tuple[tuple[str, tuple[str, ...]], ...] = (
-    (
-        "eBay",
-        (
-            "https://www.ebay.co.uk/sch/i.html?_nkw={q}",
-            "https://www.ebay.com/sch/i.html?_nkw={q}",
-        ),
-    ),
-    (
-        "Amazon",
-        (
-            "https://www.amazon.com/s?k={q}",
-            "https://www.amazon.de/s?k={q}",
-        ),
-    ),
-    (
-        "Autodoc",
-        (
-            "https://www.autodoc.co.uk/search?keyword={q}",
-            "https://www.autodoc.de/search?keyword={q}",
-        ),
-    ),
+GASOLINE_OIL_RE = re.compile(r"\b(?:ILSAC|API(?:\s+Service)?\s+S[LMNP]|ACEA\s+A\d)\b", re.IGNORECASE)
+DIESEL_OIL_RE = re.compile(r"\b(?:ACEA\s+[BC]\d|API\s+C[HIJK]-4)\b", re.IGNORECASE)
+ATF_RE = re.compile(r"\b(?:ATF\s+SP-?IV|SP-?IV|PSF-4|ATF\s+SP-?III|Dexron\s+\w+)\b", re.IGNORECASE)
+COOLANT_RE = re.compile(r"\b(?:ethylene\s+glycol|OAT|HOAT|G12\+*|G13|P-OAT)\b", re.IGNORECASE)
+BATTERY_RE = re.compile(r"\b(?:\d{2,3}\s?Ah|AGM|EFB|\d{3}\s?CCA)\b", re.IGNORECASE)
+WIPER_RE = re.compile(r"\b(?:\d{3}\s?mm|\d{2}\s?(?:in|inch|\"))\b", re.IGNORECASE)
+SAFE_QUERY = re.compile(r"[^A-Za-z0-9./\-\s+]+")
+NO_SPEC = re.compile(
+    r"does not specify|does not list|no (?:bulb )?type|not specify a bulb|"
+    r"cannot quote|do not have|lacks a|no .*part number|no .*wattage",
+    re.IGNORECASE,
 )
 
+REGION_SITES: dict[str, tuple[tuple[str, str], ...]] = {
+    "eu": (
+        ("eBay", "https://www.ebay.de/sch/i.html?_nkw={q}"),
+        ("Amazon", "https://www.amazon.de/s?k={q}"),
+        ("Autodoc", "https://www.autodoc.de/search?keyword={q}"),
+    ),
+    "uk": (
+        ("eBay", "https://www.ebay.co.uk/sch/i.html?_nkw={q}"),
+        ("Amazon", "https://www.amazon.co.uk/s?k={q}"),
+        ("Autodoc", "https://www.autodoc.co.uk/search?keyword={q}"),
+    ),
+    "us": (
+        ("eBay", "https://www.ebay.com/sch/i.html?_nkw={q}"),
+        ("Amazon", "https://www.amazon.com/s?k={q}"),
+    ),
+}
 ALLOWED_HOSTS = {
     "www.ebay.com",
     "www.ebay.co.uk",
@@ -74,49 +75,62 @@ ALLOWED_HOSTS = {
     "www.autodoc.co.uk",
     "www.autodoc.de",
 }
+PROBE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml",
+}
+HOST_TTL_SECONDS = 6 * 3600
+_HOST_STATUS: dict[str, tuple[float, bool]] = {}
+
+
+def sites() -> tuple[tuple[str, str], ...]:
+    region = (settings.shop_region or "eu").strip().lower()
+    return REGION_SITES.get(region, REGION_SITES["eu"])
 
 
 def _blob(question: str, retrieved: dict[str, Any], answer: str) -> str:
     parts = [question, answer]
     for spec in retrieved.get("specs") or []:
-        parts.append(" ".join(str(spec.get(k) or "") for k in ("value_raw", "part_name", "raw_context")))
+        parts.append(f"{spec.get('part_name','')} {spec.get('value_raw','')} {spec.get('raw_context','')}")
     for chunk in retrieved.get("chunks") or []:
         parts.append(chunk.get("content") or "")
     return "\n".join(parts)
 
 
-def _kind(question: str) -> str:
-    q = question.lower().replace("lightbuld", "lightbulb")
-    if re.search(r"\b(tire|tyre)\b", q):
-        return "tire"
-    if re.search(r"\b(oil|lubricant)\b", q):
-        return "engine oil"
-    if re.search(r"\b(coolant|antifreeze)\b", q):
-        return "coolant"
-    if re.search(r"\b(atf|transmission)\b", q):
-        return "ATF"
-    if re.search(r"\b(wiper)\b", q):
-        return "wiper blade"
-    if re.search(r"\b(filter)\b", q):
-        return "filter"
-    if re.search(r"lightbulb|headlight|\bbulbs?\b|\blamps?\b|\bfog\b|\blights?\b", q):
-        return "bulb"
-    return ""
-
-
-NO_SPEC = re.compile(
-    r"does not specify|does not list|no (?:bulb )?type|not specify a bulb|"
-    r"cannot quote|do not have|lacks a|no .*part number|no .*wattage",
-    re.IGNORECASE,
-)
+def _kind(question: str, context: str = "") -> str:
+    return part_kind(question, context)
 
 
 def _diesel_windows(text: str) -> str:
-    lines = []
-    for line in text.splitlines():
-        if re.search(r"diesel|dpf|acea\s+c", line, re.I):
-            lines.append(line)
-    return "\n".join(lines)
+    return "\n".join(
+        line for line in text.splitlines() if re.search(r"diesel|dpf|crdi|acea\s+[bc]\d", line, re.I)
+    )
+
+
+def _oil_spec(text: str, fuel: str) -> str | None:
+    if fuel == "diesel":
+        scoped = _diesel_windows(text)
+        vis = VISCOSITY_RE.search(scoped) if scoped else None
+        spec = DIESEL_OIL_RE.search(scoped or "") or OIL_SPEC_RE.search(scoped or "")
+        if spec and GASOLINE_OIL_RE.search(spec.group(0)):
+            spec = None
+        bits = [p.group(0) for p in (vis, spec) if p]
+        if not bits:
+            # Fuel alone is not a manual spec. The caller builds an honest fallback.
+            return None
+        bits.append("diesel")
+        if re.search(r"\bdpf\b", text, re.I):
+            bits.append("DPF")
+        return " ".join(bits)
+    vis = VISCOSITY_RE.search(text)
+    spec = OIL_SPEC_RE.search(text)
+    if fuel == "gasoline" and spec and DIESEL_OIL_RE.search(spec.group(0)):
+        spec = None
+    bits = [p.group(0) for p in (vis, spec) if p]
+    return " ".join(bits) if bits else None
 
 
 def extract_spec(
@@ -124,96 +138,84 @@ def extract_spec(
     retrieved: dict[str, Any],
     answer: str = "",
     vehicle: dict[str, Any] | None = None,
+    context: str = "",
 ) -> str | None:
+    """Exact type for the asked-about part, using only that part's patterns."""
     if answer and NO_SPEC.search(answer):
         return None
     text = _blob(question, retrieved, answer)
-    kind = _kind(question)
-    fuel = str((vehicle or {}).get("fuel") or "").lower()
-    if kind == "engine oil" and fuel not in {"diesel", "gasoline"}:
-        disp = str((vehicle or {}).get("displacement_l") or (vehicle or {}).get("engine_label") or "")
-        disp_m = re.search(r"(\d+\.\d+)", disp)
-        if disp_m and re.search(r"\bdiesel\b", text, re.I):
-            num = re.escape(disp_m.group(1))
-            labeled = bool(re.search(rf"diesel.{{0,80}}{num}|{num}\s*/\s*\d+\.\d+", text, re.I))
-            dpf_row = bool(re.search(r"diesel engine with dpf", text, re.I))
-            gas_same = bool(re.search(rf"gasoline.{{0,40}}{num}", text, re.I))
-            if (labeled or dpf_row) and not gas_same:
-                fuel = "diesel"
+    kind = _kind(question, context)
     if kind == "tire":
         hit = TIRE_RE.search(text)
-        return hit.group(0).upper() if hit else None
-    if kind in {"engine oil", "coolant"}:
-        search_in = text
-        if kind == "engine oil" and fuel == "diesel":
-            diesel_text = _diesel_windows(text)
-            vis = VISCOSITY_RE.search(diesel_text) if diesel_text else None
-            spec = OIL_SPEC_RE.search(diesel_text) if diesel_text else None
-            if spec and GASOLINE_OIL_RE.search(spec.group(0)) and not re.search(r"ACEA\s+C", spec.group(0), re.I):
-                spec = None
-            bits = [p.group(0) for p in (vis, spec) if p]
-            bits.append("diesel")
-            if re.search(r"\bdpf\b", text, re.I):
-                bits.append("DPF")
-            return " ".join(bits)
-        vis = VISCOSITY_RE.search(search_in)
-        spec = OIL_SPEC_RE.search(search_in)
-        bits = [p.group(0) for p in (vis, spec) if p]
-        return " ".join(bits) if bits else None
+        return hit.group(0).upper().replace(" ", "") if hit else None
+    if kind == "engine oil":
+        fuel = str((vehicle or {}).get("fuel") or "").lower()
+        if fuel not in {"diesel", "gasoline"}:
+            disp = (vehicle or {}).get("displacement_l") or (vehicle or {}).get("engine_label")
+            fuel = manual_fuel_from_text(text, str(disp or "")) or ""
+        return _oil_spec(text, fuel)
+    if kind == "coolant":
+        hit = COOLANT_RE.search(text)
+        return hit.group(0) if hit else None
     if kind == "ATF":
         hit = ATF_RE.search(text)
         return hit.group(0).upper() if hit else None
-    bulb = BULB_RE.search(text)
-    if bulb:
-        return bulb.group(0).upper()
-    tire = TIRE_RE.search(text)
-    if tire:
-        return tire.group(0).upper()
-    vis = VISCOSITY_RE.search(text)
-    if vis:
-        return vis.group(0)
+    if kind == "battery":
+        hit = BATTERY_RE.search(text)
+        return hit.group(0) if hit else None
+    if kind == "wiper blade":
+        hit = WIPER_RE.search(text)
+        return hit.group(0) if hit else None
+    if kind == "bulb":
+        counts: dict[str, int] = {}
+        for match in BULB_RE.findall(text):
+            key = match.upper()
+            counts[key] = counts.get(key, 0) + 1
+        if not counts:
+            return None
+        return max(counts, key=lambda k: (counts[k], len(k)))
     return None
 
 
 def _vehicle_bits(vehicle: dict[str, Any] | None) -> list[str]:
     if not vehicle:
         return []
-    out: list[str] = []
-    for key in ("year", "make", "model"):
-        value = vehicle.get(key)
-        if value:
-            out.append(str(value))
-    return out
+    bits = [str(vehicle.get("year") or ""), str(vehicle.get("make") or ""), str(vehicle.get("model") or "")]
+    return [b for b in bits if b and b.lower() not in {"none", "any"}]
 
 
-def search_query(spec: str, question: str, vehicle: dict[str, Any] | None) -> str:
-    kind = _kind(question)
+POSITION_WORDS = ("fog", "headlight", "headlamp", "low beam", "high beam", "brake", "reverse", "indicator", "cabin", "rear", "front")
+
+
+def search_query(spec: str, question: str, vehicle: dict[str, Any] | None, context: str = "") -> str:
+    kind = _kind(question, context)
     parts: list[str] = []
-    # Year/make/model on fluid searches turns eBay into car listings.
+    # Fluids are generic products: the car name turns eBay into car listings.
     if kind not in FLUID_KINDS:
         parts.extend(_vehicle_bits(vehicle))
     if spec:
         parts.append(spec)
     if kind and kind.lower() not in (spec or "").lower():
         parts.append(kind)
+    q_low = f"{question} {context if kind == _kind(context) else ''}".lower()
+    for word in POSITION_WORDS:
+        if word in q_low and word not in " ".join(parts).lower():
+            parts.append(word)
     raw = SAFE_QUERY.sub(" ", " ".join(parts))
     return re.sub(r"\s+", " ", raw).strip()[:90]
 
 
 def web_part_guess(vehicle: dict[str, Any] | None, kind: str) -> tuple[str | None, str]:
-    """Best-effort type from public web snippets. Not a manual fact."""
+    """Best-effort bulb code from public web snippets. Labeled unverified in the UI."""
     bits = _vehicle_bits(vehicle) + [kind or "bulb", "type"]
     research = "https://duckduckgo.com/?q=" + quote_plus(" ".join(bits))
+    if kind != "bulb":
+        return None, research
     html_url = "https://html.duckduckgo.com/html/?q=" + quote_plus(" ".join(bits))
     try:
         import httpx
 
-        resp = httpx.get(
-            html_url,
-            timeout=8.0,
-            follow_redirects=True,
-            headers={"User-Agent": "Mozilla/5.0 HoodwiseLookup/1.0"},
-        )
+        resp = httpx.get(html_url, timeout=6.0, follow_redirects=True, headers=PROBE_HEADERS)
         text = resp.text or ""
     except Exception:
         return None, research
@@ -267,46 +269,47 @@ def _still_search_url(url: str) -> bool:
 
 
 def probe_shop_url(url: str) -> bool:
-    """Live check: keep bot-walled search pages; drop dead hosts and homepage redirects."""
+    """Live check of one URL. Dead host or 404 search path fails; a bot wall passes."""
     if not shop_url_allowed(url):
         return False
     try:
         import httpx
 
-        resp = httpx.get(
-            url,
-            timeout=6.0,
-            follow_redirects=True,
-            headers=PROBE_HEADERS,
-        )
+        resp = httpx.get(url, timeout=4.0, follow_redirects=True, headers=PROBE_HEADERS)
     except Exception:
         return False
-    if resp.status_code == 404:
+    if resp.status_code == 404 or resp.status_code >= 500:
         return False
-    if resp.status_code not in {200, 202, 204, 301, 302, 303, 307, 308, 403}:
+    if resp.status_code not in {200, 202, 204, 301, 302, 303, 307, 308, 403, 429}:
         return False
-    final = str(resp.url)
-    if _still_search_url(final):
+    if _still_search_url(str(resp.url)):
         return True
-    # eBay/Autodoc often 403 on the original search URL and never rewrite it.
-    if resp.status_code == 403 and shop_url_allowed(url):
-        return True
-    return False
+    return resp.status_code in {403, 429}
+
+
+def host_alive(url: str) -> bool:
+    """probe_shop_url, cached per host for HOST_TTL_SECONDS so chat never waits twice."""
+    host = urlparse(url).netloc
+    now = time.time()
+    cached = _HOST_STATUS.get(host)
+    if cached and now - cached[0] < HOST_TTL_SECONDS:
+        return cached[1]
+    alive = probe_shop_url(url)
+    _HOST_STATUS[host] = (now, alive)
+    return alive
 
 
 def validate_shop_url(url: str) -> bool:
-    return shop_url_allowed(url) and probe_shop_url(url)
+    return shop_url_allowed(url) and host_alive(url)
 
 
 def pick_shop_links(query: str) -> list[dict[str, str]]:
     encoded = quote_plus(query)
     links: list[dict[str, str]] = []
-    for name, templates in SITES:
-        for template in templates:
-            url = template.format(q=encoded)
-            if validate_shop_url(url):
-                links.append({"name": name, "url": url})
-                break
+    for name, template in sites():
+        url = template.format(q=encoded)
+        if validate_shop_url(url):
+            links.append({"name": name, "url": url})
     return links
 
 
@@ -315,43 +318,50 @@ def shop_links(
     retrieved: dict[str, Any],
     vehicle: dict[str, Any] | None = None,
     answer: str = "",
+    context: str = "",
 ) -> dict[str, Any] | None:
-    if SKIP_INTENT.search(question) and not SHOP_INTENT.search(question):
+    kind = _kind(question, context)
+    if not kind:
         return None
-    if not SHOP_INTENT.search(question):
+    if SKIP_INTENT.search(question) and kind not in FLUID_KINDS and kind != "bulb":
         return None
-    spec = extract_spec(question, retrieved, answer, vehicle)
+    spec = extract_spec(question, retrieved, answer, vehicle, context)
     source = "manual" if spec else "search"
     research = None
-    kind = _kind(question)
-    if not spec and kind:
+    if not spec and kind == "bulb":
         guessed, research = web_part_guess(vehicle, kind)
         if guessed:
             spec = guessed
             source = "web"
     label = spec or kind
-    query = search_query(label, question, vehicle)
+    fuel = str((vehicle or {}).get("fuel") or "")
+    if not spec and kind == "engine oil" and fuel in {"diesel", "gasoline"}:
+        # No grade in the manual, but the fuel is pinned: never send a diesel to petrol oil.
+        label = "diesel engine oil" if fuel == "diesel" else "petrol engine oil"
+        if fuel == "diesel" and re.search(r"\bdpf\b", _blob(question, retrieved, answer), re.I):
+            label += " DPF low SAPS"
+    query = search_query(label, question, vehicle, context)
     if not query:
         return None
-    extra = []
-    for word in ("fog", "headlight", "cabin", "wiper"):
-        if word in question.lower() and word not in query.lower():
-            extra.append(word)
-    if extra:
-        query = (query + " " + " ".join(extra)).strip()[:90]
     if source == "manual":
         note = (
-            "Exact type from the ingested manual. These are search pages we checked. "
-            "Check fitment yourself. We are not picking a listing."
+            f"Exact {kind} type from the ingested manual. These are search pages on shops that "
+            "answered our check. Listings are not verified for fitment. Check yourself."
         )
     elif source == "web":
         note = (
-            "Not in the ingested manual. Type seen on the web (unverified): "
+            f"Not in the ingested manual. {kind.title()} type seen on the web (unverified): "
             f"{spec}. Check fitment yourself."
+        )
+    elif kind in FLUID_KINDS:
+        note = (
+            f"The ingested manual did not name an exact {kind} grade. Search is the fluid"
+            + (f" for a {fuel} engine" if fuel else "")
+            + ". Check the viscosity chart and fitment yourself."
         )
     else:
         note = (
-            "The ingested manual did not name a type. Search is year, make, model, "
+            f"The ingested manual did not name an exact {kind} type. Search is year, make, model, "
             "and the part. Check fitment yourself."
         )
     links = pick_shop_links(query)
@@ -360,6 +370,7 @@ def shop_links(
     if not links:
         return None
     return {
+        "kind": kind,
         "spec": spec or label,
         "query": query,
         "source": source,

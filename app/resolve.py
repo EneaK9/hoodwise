@@ -16,6 +16,8 @@ HINT_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("2.0", re.compile(r"2\.0|k20", re.I)),
 ]
 
+NOT_AN_ENGINE = {"owner manual", "infotainment", "owner's manual", "navigation"}
+
 PART_PHRASES = (
     "front brake hose",
     "rear brake hose",
@@ -42,8 +44,33 @@ def infer_hints_from_text(text: str) -> list[str]:
     return hints
 
 
+_DIESEL_ROW = re.compile(r"\bdiesel\s+engine(?:\s+with\s+dpf)?|\bdpf\b|\bcrdi\b", re.I | re.S)
+
+
+def manual_fuel_from_text(text: str, displacement: str | None) -> str | None:
+    """Diesel only if the manual labels a diesel row for this engine size.
+
+    Table text arrives with newlines between words ("Diesel\\nEngine\\nwith DPF"), so
+    every gap is matched with \\s+. Returns None when a petrol row shares the size.
+    """
+    if not text or not re.search(r"\bdiesel\b", text, re.I):
+        return None
+    disp_m = re.search(r"(\d+\.\d+)", str(displacement or ""))
+    if not disp_m:
+        return None
+    num = re.escape(disp_m.group(1))
+    labeled = bool(
+        re.search(rf"diesel.{{0,80}}{num}|\bR{num}\b|{num}\s*/\s*\d+\.\d+", text, re.I | re.S)
+    )
+    dpf_row = bool(_DIESEL_ROW.search(text))
+    gas_same = bool(re.search(rf"(gasoline|petrol).{{0,40}}{num}\s*L?\b", text, re.I | re.S))
+    if (labeled or dpf_row) and not gas_same:
+        return "diesel"
+    return None
+
+
 def apply_manual_fuel(vehicle: dict[str, Any] | None, retrieved: dict[str, Any] | None) -> None:
-    """If the VIN has no fuel, pin it when a labeled oil row matches displacement."""
+    """Last resort: if the VIN has no fuel, pin it from a labeled manual row."""
     if not vehicle or not retrieved:
         return
     if vehicle.get("fuel") in {"diesel", "gasoline"}:
@@ -52,41 +79,39 @@ def apply_manual_fuel(vehicle: dict[str, Any] | None, retrieved: dict[str, Any] 
         str(chunk.get("content") or "") for chunk in retrieved.get("chunks") or []
     )
     disp = str(vehicle.get("displacement_l") or vehicle.get("engine_label") or "")
-    disp_m = re.search(r"(\d+\.\d+)", disp)
-    if not disp_m or not re.search(r"\bdiesel\b", text, re.I):
+    fuel = manual_fuel_from_text(text, disp)
+    if not fuel:
         return
-    num = re.escape(disp_m.group(1))
-    labeled = bool(re.search(rf"diesel.{{0,80}}{num}|{num}\s*/\s*\d+\.\d+", text, re.I))
-    dpf_row = bool(re.search(r"diesel engine with dpf", text, re.I))
-    gas_same = bool(re.search(rf"gasoline.{{0,40}}{num}", text, re.I))
-    if not ((labeled or dpf_row) and not gas_same):
-        return
-    vehicle["fuel"] = "diesel"
+    vehicle["fuel"] = fuel
+    vehicle["fuel_source"] = "manual"
+    vehicle["needs_fuel_confirmation"] = False
     label = vehicle.get("label") or ""
-    if label and "diesel" not in label.lower():
-        vehicle["label"] = f"{label} diesel"
+    if label and fuel not in label.lower():
+        vehicle["label"] = f"{label} {fuel}"
 
 
 def infer_fuel(decoded: dict[str, Any] | None) -> str | None:
     if not decoded:
         return None
-    from app.vin import _fuel_from_text
+    from app.vin import infer_engine_identity
 
-    explicit = decoded.get("fuel")
-    if explicit in {"diesel", "gasoline"}:
-        return explicit
-    if isinstance(explicit, str):
-        hit = _fuel_from_text(explicit)
+    return infer_engine_identity(decoded).get("fuel")
+
+
+def displacement_hint(decoded: dict[str, Any] | None) -> str | None:
+    if not decoded:
+        return None
+    for key in ("displacement_l", "engine_label", "engine_family"):
+        hit = re.search(r"(\d\.\d)", str(decoded.get(key) or ""))
         if hit:
-            return hit
-    bits = [
-        str(decoded.get(k) or "")
-        for k in ("fuel", "engine_label", "engine_code", "trim")
-    ]
-    for spec in decoded.get("specs") or []:
-        bits.append(str(spec.get("label") or ""))
-        bits.append(str(spec.get("value") or ""))
-    return _fuel_from_text(" ".join(bits))
+            return hit.group(1)
+    cc = decoded.get("displacement_cc")
+    if cc:
+        try:
+            return f"{int(cc) / 1000:.1f}"
+        except (TypeError, ValueError):
+            return None
+    return None
 
 
 def infer_hints_from_decode(decoded: dict[str, Any] | None) -> list[str]:
@@ -94,12 +119,15 @@ def infer_hints_from_decode(decoded: dict[str, Any] | None) -> list[str]:
         return []
     blob = " ".join(
         str(decoded.get(k) or "")
-        for k in ("fuel", "engine_label", "engine_code", "trim", "transmission", "body")
+        for k in ("fuel", "engine_label", "engine_family", "engine_code", "trim", "transmission", "body")
     )
     hints = infer_hints_from_text(blob)
     fuel = infer_fuel(decoded)
     if fuel and fuel not in hints:
         hints.append(fuel)
+    disp = displacement_hint(decoded)
+    if disp and disp not in hints:
+        hints.append(disp)
     return hints
 
 
@@ -116,8 +144,16 @@ def vehicle_label(decoded: dict[str, Any] | None) -> str | None:
         str(infer_fuel(decoded) or decoded.get("fuel") or ""),
         str(decoded.get("transmission") or ""),
     ]
-    skip = {"none", "any", "n/a", "unknown", "null"}
-    label = " ".join(b for b in bits if b and b.lower() not in skip).strip()
+    skip = {"none", "any", "n/a", "unknown", "null"} | NOT_AN_ENGINE
+    seen: set[str] = set()
+    kept: list[str] = []
+    for bit in bits:
+        low = bit.lower()
+        if not bit or low in skip or low in seen:
+            continue
+        seen.add(low)
+        kept.append(bit)
+    label = " ".join(kept).strip()
     if label and not decoded.get("model"):
         label = f"{label} (model unconfirmed)"
     return label or None
@@ -150,18 +186,23 @@ def _enrich_from_variant(decoded: dict[str, Any]) -> dict[str, Any]:
     if not row:
         return decoded
     for key in ("engine_label", "engine_code", "transmission", "trim", "body"):
-        if not decoded.get(key) and row.get(key):
-            decoded[key] = row[key]
+        value = row.get(key)
+        if key == "engine_label" and str(value or "").lower() in NOT_AN_ENGINE:
+            continue  # catalog placeholders ("Owner manual"), not engines
+        if not decoded.get(key) and value:
+            decoded[key] = value
     return decoded
 
 
 def public_vehicle(decoded: dict[str, Any] | None) -> dict[str, Any] | None:
     if not decoded:
         return None
-    decoded = _enrich_from_variant(dict(decoded))
-    fuel = infer_fuel(decoded)
-    if fuel:
-        decoded["fuel"] = fuel
+    from app.vin import apply_engine_identity
+
+    decoded = apply_engine_identity(_enrich_from_variant(dict(decoded)))
+    fuel = decoded.get("fuel") if decoded.get("fuel") in {"diesel", "gasoline"} else None
+    has_engine = bool(decoded.get("displacement_l") or decoded.get("displacement_cc") or decoded.get("engine_label"))
+    electric = bool(re.search(r"\b(electric|ev|bev)\b", str(decoded.get("engine_label") or ""), re.I))
     return {
         "year": decoded.get("year"),
         "make": decoded.get("make"),
@@ -170,7 +211,10 @@ def public_vehicle(decoded: dict[str, Any] | None) -> dict[str, Any] | None:
         "body": decoded.get("body"),
         "engine_label": decoded.get("engine_label"),
         "engine_code": decoded.get("engine_code"),
+        "engine_family": decoded.get("engine_family"),
         "fuel": fuel,
+        "fuel_source": decoded.get("fuel_source") if fuel else None,
+        "needs_fuel_confirmation": bool(has_engine and not fuel and not electric and decoded.get("model")),
         "transmission": decoded.get("transmission"),
         "variant_id": decoded.get("variant_id"),
         "source": decoded.get("source"),
@@ -179,12 +223,91 @@ def public_vehicle(decoded: dict[str, Any] | None) -> dict[str, Any] | None:
         "label": vehicle_label(decoded),
         "specs": decoded.get("specs") or [],
         "displacement_l": decoded.get("displacement_l"),
+        "displacement_cc": decoded.get("displacement_cc"),
         "plant_country": decoded.get("plant_country"),
         "history": decoded.get("history"),
     }
 
 
-def resolve_vehicle(message: str, vin: str | None, session_vin: str | None = None) -> dict[str, Any]:
+def vehicle_catalog() -> list[tuple[str, str]]:
+    from app.db import fetch_all
+
+    try:
+        rows = fetch_all("SELECT DISTINCT make, model FROM vehicles ORDER BY make, model")
+    except Exception:
+        return []
+    return [(r["make"], r["model"]) for r in rows if r.get("make") and r.get("model")]
+
+
+def model_year_ranges(make: str, model: str) -> list[tuple[int, int]]:
+    from app.db import fetch_all
+
+    try:
+        rows = fetch_all(
+            """
+            SELECT DISTINCT year_from, year_to FROM vehicles
+             WHERE lower(make) = lower(%s) AND lower(model) = lower(%s)
+             ORDER BY year_from
+            """,
+            (make, model),
+        )
+    except Exception:
+        return []
+    return [(int(r["year_from"]), int(r["year_to"])) for r in rows if r.get("year_from") and r.get("year_to")]
+
+
+def decoded_from_text(
+    message: str, catalog: list[tuple[str, str]], context: str = ""
+) -> dict[str, Any] | None:
+    """A vehicle profile from the conversation when there is no VIN.
+
+    The car may be named in an earlier turn and the year, engine size, or fuel supplied
+    later as a one-word reply. Newer details overlay older ones. Marked source "text".
+    """
+    from app.intent import parse_vehicle_details, parse_vehicle_mention
+
+    mention = parse_vehicle_mention(message, catalog) or (
+        parse_vehicle_mention(context, catalog) if context else None
+    )
+    if not mention:
+        return None
+    for source in (context, message):
+        if not source:
+            continue
+        for key, value in parse_vehicle_details(source).items():
+            if value:
+                mention[key] = value
+    engine_label = f"{mention['displacement_l']}L" if mention.get("displacement_l") else None
+    return {
+        "source": "text",
+        "raw": None,
+        "make": mention["make"],
+        "model": mention["model"],
+        "year": mention.get("year"),
+        "engine_code": None,
+        "engine_label": engine_label,
+        "displacement_l": mention.get("displacement_l"),
+        "fuel": mention.get("fuel"),
+        "fuel_source": "user" if mention.get("fuel") else None,
+        "transmission": None,
+        "trim": None,
+        "body": None,
+        "plant_country": None,
+        "confidence": "partial",
+        "note": "Identified from your message, not a VIN. Add the VIN for the exact engine.",
+        "specs": [],
+    }
+
+
+def resolve_vehicle(
+    message: str,
+    vin: str | None,
+    session_vin: str | None = None,
+    context: str = "",
+) -> dict[str, Any]:
+    """Pin the car. `context` is the previous user turn, used only for follow-ups."""
+    from app.intent import is_follow_up
+
     found = find_vins(message)
     chosen = (vin or (found[0] if found else None) or session_vin or "").strip().upper() or None
     decoded = None
@@ -196,7 +319,16 @@ def resolve_vehicle(message: str, vin: str | None, session_vin: str | None = Non
         except ValueError:
             decoded = None
             chosen = None
+    if not decoded:
+        # No VIN: the question itself may name the car. Never search every manual blindly.
+        from app.vin import _match_variant
+
+        decoded = decoded_from_text(message, vehicle_catalog(), context)
+        if decoded:
+            decoded["variant_id"] = _match_variant(decoded)
     hints = infer_hints_from_decode(decoded) + infer_hints_from_text(message)
+    if context and is_follow_up(message):
+        hints += infer_hints_from_text(context)
     # de-dupe, keep order
     seen: set[str] = set()
     ordered: list[str] = []

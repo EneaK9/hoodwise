@@ -5,6 +5,7 @@ from app.resolve import (
     infer_fuel,
     infer_hints_from_decode,
     infer_hints_from_text,
+    manual_fuel_from_text,
     public_vehicle,
     vehicle_label,
 )
@@ -15,7 +16,37 @@ from app.retrieval import (
     _ts_or_query,
     filter_specs_for_hints,
     score_capacity_chunk,
+    search_vehicle_id,
 )
+
+
+def test_catalog_placeholder_is_not_an_engine_label() -> None:
+    label = vehicle_label({"year": 2016, "make": "Hyundai", "model": "Santa Fe", "engine_label": "Owner manual", "transmission": "Any"})
+    assert label == "2016 Hyundai Santa Fe"
+
+
+def test_no_vehicle_means_no_filter_not_civic() -> None:
+    assert search_vehicle_id(None) is None
+    assert search_vehicle_id("abc") == "abc"
+
+
+def test_public_vehicle_flags_unknown_fuel_for_confirmation() -> None:
+    pub = public_vehicle(
+        {"year": 2016, "make": "Hyundai", "model": "Santa Fe", "engine_label": "2.0L", "displacement_l": "2.0", "specs": []}
+    )
+    assert pub is not None
+    # 2.0 L with no cc: no engine-size match, no emissions, so ask the owner.
+    assert pub["fuel"] is None
+    assert pub["needs_fuel_confirmation"] is True
+    pinned = public_vehicle(
+        {"year": 2016, "make": "Hyundai", "model": "Santa Fe", "displacement_cc": 1995, "specs": []}
+    )
+    assert pinned is not None
+    assert pinned["fuel"] == "diesel"
+    assert pinned["fuel_source"] == "engine-size"
+    assert pinned["engine_family"] == "2.0 CRDi"
+    assert pinned["needs_fuel_confirmation"] is False
+    assert "2.0 CRDi diesel" in pinned["label"]
 
 
 def test_clean_part_prefers_known_phrase() -> None:
@@ -54,10 +85,17 @@ def test_pin_diesel_when_manual_has_matching_row() -> None:
         {"chunks": [{"content": "Diesel Engine with DPF\nDiesel 2.0/2.2L\n6.3 l"}]},
     )
     assert vehicle["fuel"] == "diesel"
+    assert vehicle["fuel_source"] == "manual"
     assert "diesel" in vehicle["label"].lower()
+    # Real chunk layout: every word of the label on its own line.
     dpf_only = {"engine_label": "2.0L", "displacement_l": "2.0", "label": "2016 Hyundai Santa Fe 2.0L"}
-    apply_manual_fuel(dpf_only, {"chunks": [{"content": "Diesel Engine with DPF *6\n6.3 l (6.66 US qt.)"}]})
+    apply_manual_fuel(
+        dpf_only,
+        {"chunks": [{"content": "5.7 l (6.02 US qt.)\nDiesel\nEngine\nwith DPF *6\n6.3 l (6.66 US qt.)"}]},
+    )
     assert dpf_only["fuel"] == "diesel"
+    assert manual_fuel_from_text("Diesel\nEngine\nwith DPF *6\n6.3 l", "2.0") == "diesel"
+    assert manual_fuel_from_text("Gasoline Engine 2.0L 4.8 l", "2.0") is None
     gas_24 = {"engine_label": "2.4L", "displacement_l": "2.4", "label": "2016 Hyundai Santa Fe 2.4L"}
     apply_manual_fuel(
         gas_24,

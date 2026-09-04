@@ -18,7 +18,10 @@ export type VehicleInfo = {
   trim?: string | null;
   body?: string | null;
   engine_label?: string | null;
+  engine_family?: string | null;
   fuel?: string | null;
+  fuel_source?: string | null;
+  needs_fuel_confirmation?: boolean;
   transmission?: string | null;
   label?: string | null;
   variant_id?: string | null;
@@ -57,11 +60,16 @@ export type ChatResponse = {
   vehicle?: VehicleInfo | null;
   model?: string | null;
   shop?: ShopLinks | null;
+  clarify?: Clarify | null;
+  needs_fuel?: boolean;
 };
+
+export type Clarify = { missing: string; options: string[] };
 
 export type ShopLink = { name: string; url: string };
 
 export type ShopLinks = {
+  kind?: string;
   spec: string;
   query: string;
   note: string;
@@ -91,4 +99,5 @@ export type ChatMessage = {
   citations?: Citation[];
   vehicle?: VehicleInfo | null;
   shop?: ShopLinks | null;
+  clarify?: Clarify | null;
 };

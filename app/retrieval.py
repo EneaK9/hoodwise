@@ -55,7 +55,11 @@ def _keywords(question: str) -> list[str]:
         "what", "is", "the", "a", "an", "for", "on", "of", "to", "in", "and",
         "or", "how", "do", "does", "with", "from", "this", "that", "these",
         "those", "my", "your", "car", "take", "much", "please", "need",
-        "want", "tell", "me", "it", "its", "about", "many",
+        "want", "tell", "me", "it", "its", "about", "many", "needs", "needed",
+        "should", "use", "which", "kind", "are", "there", "can", "get", "some",
+        "any", "type", "types", "refill", "put", "into", "vehicle", "recommended",
+        "right", "correct", "good", "best", "buy", "have", "has", "when", "where",
+        "who", "why", "will", "would", "could", "know", "give", "show", "find",
     }
     words = re.findall(r"[A-Za-z0-9./-]+", question.lower())
     return [w for w in words if w not in stop and len(w) > 1][:8]
@@ -64,14 +68,16 @@ def _keywords(question: str) -> list[str]:
 def _ts_or_query(question: str) -> str:
     keys = [re.sub(r"[^a-z0-9]+", "", k) for k in _keywords(question)]
     keys = [k for k in keys if k]
-    return " | ".join(keys) if keys else "oil"
+    if keys:
+        return " | ".join(keys)
+    words = [re.sub(r"[^a-z0-9]+", "", w) for w in question.lower().split()]
+    words = [w for w in words if len(w) > 2]
+    return " | ".join(words[:4]) if words else "specification"
 
 
 def search_vehicle_id(vehicle_id: str | None) -> str | None:
-    if vehicle_id:
-        return vehicle_id
-    row = fetch_one("SELECT id FROM vehicles WHERE make = 'Honda' AND model = 'Civic' LIMIT 1")
-    return str(row["id"]) if row else None
+    """No pinned car means no filter. Never silently substitute another vehicle."""
+    return vehicle_id or None
 
 
 def lookup_specs(
@@ -132,10 +138,18 @@ def lookup_specs(
     return [row for _, row in scored[:limit]]
 
 
-def _keyword_chunks(question: str, limit: int = 12, vehicle_id: str | None = None) -> list[dict[str, Any]]:
+def _keyword_chunks(
+    question: str,
+    limit: int = 12,
+    vehicle_id: str | None = None,
+    extra_terms: list[str] | None = None,
+) -> list[dict[str, Any]]:
     vid = search_vehicle_id(vehicle_id)
     ts_q = _ts_or_query(question)
-    likes = [f"%{k}%" for k in _keywords(question)[:8]] or ["%oil%"]
+    likes = [f"%{k}%" for k in _keywords(question)[:8]]
+    likes += [f"%{t}%" for t in (extra_terms or []) if len(t) >= 3]
+    if not likes:
+        likes = ["%specification%"]
     return fetch_all(
         """
         SELECT c.id, c.page_number, c.section_path, c.chunk_type, c.content,
@@ -199,13 +213,30 @@ def _rrf(keyword: list[dict], vector: list[dict], k: int = 60, limit: int = 8) -
     return out
 
 
+def _topic_rank(chunks: list[dict[str, Any]], terms: list[str]) -> list[dict[str, Any]]:
+    """Stable re-rank: chunks that mention the asked-about part come first."""
+    if not terms:
+        return chunks
+    patterns = [re.compile(rf"\b{re.escape(t)}\b", re.I) for t in terms if len(t) >= 3]
+
+    def hits(row: dict[str, Any]) -> int:
+        text = row.get("content") or ""
+        return sum(1 for p in patterns if p.search(text))
+
+    return sorted(chunks, key=hits, reverse=True)
+
+
 def search_chunks(
     question: str,
     limit: int = 8,
     vehicle_id: str | None = None,
     hints: list[str] | None = None,
+    kind: str = "",
 ) -> list[dict[str, Any]]:
-    keyword = _keyword_chunks(question, limit=12, vehicle_id=vehicle_id)
+    from app.intent import topic_terms
+
+    terms = topic_terms(kind) if kind else []
+    keyword = _keyword_chunks(question, limit=12, vehicle_id=vehicle_id, extra_terms=terms)
     vector = _vector_chunks(question, limit=12, vehicle_id=vehicle_id)
     if not vector:
         merged = keyword[:limit]
@@ -213,10 +244,12 @@ def search_chunks(
         merged = vector[:limit]
     else:
         merged = _rrf(keyword, vector, limit=limit)
-    if _is_capacity_query(question):
+    if _is_capacity_query(question) and kind in {"engine oil", "coolant", "ATF", "brake fluid", ""}:
         merged = _prefer_capacity_chunks(
             merged, vehicle_id=vehicle_id, limit=limit, hints=hints
         )
+    elif terms:
+        merged = _topic_rank(merged, terms)
     return merged
 
 
@@ -270,7 +303,8 @@ def _merge_page_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
         existing = groups[key].get("content") or ""
         extra = chunk.get("content") or ""
         if extra and extra not in existing:
-            groups[key]["content"] = (existing + "\n" + extra)[:4000]
+            # A full capacity table page runs past 4000 chars; cutting it drops rows.
+            groups[key]["content"] = (existing + "\n" + extra)[:12000]
     return [groups[key] for key in order]
 
 
@@ -318,11 +352,13 @@ def score_capacity_chunk(text: str, hints: list[str] | None = None) -> int:
             score += 8
         elif diesel_row:
             score -= 6
-    if "2.0" in hints:
-        if diesel_row:
-            score += 4
-        if re.search(r"2\.4\s*l", text, re.I) and not re.search(r"2\.0", text, re.I):
+    disp = next((h for h in hints if re.fullmatch(r"\d\.\d", h)), None)
+    if disp:
+        others = {m for m in re.findall(r"\b(\d\.\d)\s*L\b", text, re.I)} - {disp}
+        if others and not re.search(rf"\b{re.escape(disp)}\b", text):
             score -= 3
+        if re.search(rf"\bR{re.escape(disp)}\b|{re.escape(disp)}\s*L?\s+CRDi", text, re.I):
+            score += 3
     return score
 
 
@@ -355,10 +391,11 @@ def retrieve(
     variant_id: str | None,
     hints: list[str] | None = None,
     vehicle_id: str | None = None,
+    kind: str = "",
 ) -> dict[str, Any]:
     numeric = is_numeric_query(question)
     specs = lookup_specs(question, variant_id, limit=8 if numeric else 4, vehicle_id=vehicle_id)
     specs = filter_specs_for_hints(specs, hints or [])
-    chunks = search_chunks(question, vehicle_id=vehicle_id, hints=hints)
+    chunks = search_chunks(question, vehicle_id=vehicle_id, hints=hints, kind=kind)
     mode = "sql_spec" if numeric and specs else "hybrid"
-    return {"mode": mode, "numeric": numeric, "specs": specs, "chunks": chunks}
+    return {"mode": mode, "numeric": numeric, "specs": specs, "chunks": chunks, "kind": kind}
