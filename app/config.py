@@ -11,10 +11,13 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     embedding_model: str = "text-embedding-3-small"
-    chat_model: str = "claude-sonnet-4-5"
+    # Drafts the answer with web search on. Needs a model that supports web_search_20260209.
+    chat_model: str = "claude-opus-5"
     vision_model: str = "claude-sonnet-4-5"
-    # Question understanding + clarification (structured output). Falls back to chat_model.
+    # Question understanding (structured output). Falls back to chat_model.
     understand_model: str = "claude-opus-5"
+    # Checks every figure in the draft against the sources (structured output).
+    verify_model: str = "claude-opus-5"
 
     manual_dir: str = "FC&FK Service Manual"
     data_dir: str = "data"

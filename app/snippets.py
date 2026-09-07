@@ -108,20 +108,16 @@ def render_snippet(doc_id: str, page_number: int, needles: list[str] | None = No
 
 
 def snippet_needles(question: str, answer: str = "") -> list[str]:
-    words = re.findall(r"[A-Za-z]{3,}", f"{question} {answer}")
-    stop = {
-        "the", "and", "for", "this", "that", "what", "does", "take", "your",
-        "from", "with", "have", "manual", "owner", "page", "pages", "specify",
-    }
+    """What to highlight on the page: the figures the answer quotes first (they are the
+    point of the citation), then the longer words of the question. No stop list."""
     out: list[str] = []
-    for word in words:
-        low = word.lower()
-        if low in stop or low in out:
-            continue
-        out.append(word)
-        if len(out) >= 6:
-            break
-    return out
+    for num in re.findall(r"\d+(?:[.,]\d+)?", answer or ""):
+        if len(num) > 1 and num not in out:
+            out.append(num)
+    for word in re.findall(r"[A-Za-z]{5,}", question or ""):
+        if word.lower() not in {w.lower() for w in out}:
+            out.append(word)
+    return out[:8]
 
 
 def pages_from_answer(answer: str) -> list[int]:

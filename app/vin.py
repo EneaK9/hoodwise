@@ -234,7 +234,8 @@ def _from_vpic_row(row: dict[str, Any], vin: str) -> dict[str, Any] | None:
         "engine_label": None,
         "displacement_l": row.get("DisplacementL") if trusted else None,
         "displacement_cc": (row.get("DisplacementCC") or None) if trusted else None,
-        "fuel": _fuel_from_text(row.get("FuelTypePrimary")) if trusted else None,
+        "fuel": None,
+        "fuel_raw": ((row.get("FuelTypePrimary") or "").strip() or None) if trusted else None,
         "transmission": trans,
         "trim": trim,
         "body": body,
@@ -296,24 +297,6 @@ def _wmi_only(vin: str) -> dict[str, Any]:
     }
 
 
-_DIESEL_RE = re.compile(
-    r"\b(diesel|crdi|tdi|cdti|dci|hdi|tdci|common[\s-]?rail)\b",
-    re.IGNORECASE,
-)
-_GAS_RE = re.compile(r"\b(gasoline|petrol|unleaded|gdi|t-?gdi)\b", re.IGNORECASE)
-
-
-def _fuel_from_text(text: str | None) -> str | None:
-    blob = text or ""
-    diesel = bool(_DIESEL_RE.search(blob))
-    gas = bool(_GAS_RE.search(blob))
-    if diesel and not gas:
-        return "diesel"
-    if gas and not diesel:
-        return "gasoline"
-    return None
-
-
 # Grams of CO2 produced per litre of fuel burned. Fixed by chemistry, not by the car.
 CO2_G_PER_LITRE = {"gasoline": 2330.0, "diesel": 2640.0}
 
@@ -339,168 +322,49 @@ def fuel_from_emissions(co2_g_km: Any, l_per_100km: Any) -> str | None:
     return best
 
 
-# Make-scoped displacement (cc) -> engine family. Only entries that are unambiguous
-# within the make. 1598 cc is deliberately absent: Hyundai builds both a petrol
-# and a diesel of that size.
-_HYUNDAI_KIA_ENGINES: dict[int, dict[str, str]] = {
-    998: {"fuel": "gasoline", "family": "1.0 T-GDi"},
-    1086: {"fuel": "gasoline", "family": "1.1 MPI"},
-    1120: {"fuel": "diesel", "family": "1.1 CRDi"},
-    1197: {"fuel": "gasoline", "family": "1.2 MPI"},
-    1248: {"fuel": "gasoline", "family": "1.25 MPI"},
-    1353: {"fuel": "gasoline", "family": "1.4 T-GDi"},
-    1368: {"fuel": "gasoline", "family": "1.4 MPI"},
-    1396: {"fuel": "gasoline", "family": "1.4 MPI"},
-    1582: {"fuel": "diesel", "family": "1.6 CRDi"},
-    1591: {"fuel": "gasoline", "family": "1.6 GDi"},
-    1685: {"fuel": "diesel", "family": "1.7 CRDi"},
-    1995: {"fuel": "diesel", "family": "2.0 CRDi"},
-    1998: {"fuel": "gasoline", "family": "2.0 T-GDi"},
-    1999: {"fuel": "gasoline", "family": "2.0 MPI"},
-    2151: {"fuel": "diesel", "family": "2.2 CRDi"},
-    2199: {"fuel": "diesel", "family": "2.2 CRDi"},
-    2359: {"fuel": "gasoline", "family": "2.4 GDi"},
-    2497: {"fuel": "gasoline", "family": "2.5 GDi"},
-    3342: {"fuel": "gasoline", "family": "3.3 V6"},
-    3470: {"fuel": "gasoline", "family": "3.5 V6"},
-    3778: {"fuel": "gasoline", "family": "3.8 V6"},
-}
-KNOWN_ENGINES: dict[str, dict[int, dict[str, str]]] = {
-    "hyundai": _HYUNDAI_KIA_ENGINES,
-    "kia": _HYUNDAI_KIA_ENGINES,
-    "honda": {
-        1498: {"fuel": "gasoline", "family": "1.5 VTEC Turbo"},
-        1597: {"fuel": "diesel", "family": "1.6 i-DTEC"},
-        1799: {"fuel": "gasoline", "family": "1.8 i-VTEC"},
-        1996: {"fuel": "gasoline", "family": "2.0 VTEC Turbo"},
-        1993: {"fuel": "gasoline", "family": "2.0 i-VTEC"},
-    },
-}
-
-FUEL_LABELS = {"fuel type", "fuel type - primary", "fuel", "fuel type primary", "primary fuel"}
-CC_LABELS = {"engine displacement (ccm)", "displacement (ccm)", "engine displacement (cc)", "displacement cc"}
-CO2_LABELS = {"co2 emission (g/km)", "co2 emissions (g/km)", "co2 (g/km)"}
-CONSUMPTION_LABELS = {
-    "fuel consumption combined (l/100km)",
-    "fuel consumption combined (l/100 km)",
-    "consumption combined (l/100km)",
-}
-
-
-def _spec_value(decoded: dict[str, Any], labels: set[str]) -> str | None:
+def _spec_number(decoded: dict[str, Any], *needles: str) -> str | None:
+    """Value of the first decoder spec whose label contains all `needles` (decoder field
+    names such as "CO2 Emission (g/km)"; these are API field names, not user wording)."""
     for spec in decoded.get("specs") or []:
         if not isinstance(spec, dict):
             continue
-        if str(spec.get("label") or "").strip().lower() in labels:
-            value = spec.get("value")
-            if value not in (None, ""):
-                return str(value)
+        label = str(spec.get("label") or "").lower()
+        if all(n in label for n in needles) and spec.get("value") not in (None, ""):
+            return str(spec["value"])
     return None
 
 
-def _displacement_cc(decoded: dict[str, Any]) -> int | None:
-    raw = decoded.get("displacement_cc") or _spec_value(decoded, CC_LABELS)
-    if raw:
-        digits = re.sub(r"[^\d]", "", str(raw))
-        if digits:
-            return int(digits)
-    litres = decoded.get("displacement_l")
-    if litres:
-        try:
-            return int(round(float(str(litres)) * 1000))
-        except ValueError:
-            return None
-    return None
-
-
-FUEL_SOURCE_NOTE = {
-    "user": "confirmed by you",
-    "decoder": "from the VIN decoder",
-    "engine-size": "from the engine size for this make",
-    "emissions": "from type-approval CO2 vs fuel consumption",
-    "manual": "from the manual's engine table",
-}
-
-
-def infer_engine_identity(decoded: dict[str, Any] | None) -> dict[str, Any]:
-    """Fuel and engine family from whatever the decode carries. No network.
-
-    Priority: user confirmation, explicit fuel field, engine-size table for the make,
-    then type-approval CO2 vs consumption. Every result names its source.
-    """
-    if not decoded:
-        return {}
-    if decoded.get("fuel_source") == "user" and decoded.get("fuel") in {"diesel", "gasoline"}:
-        return {"fuel": decoded["fuel"], "fuel_source": "user", "engine_family": decoded.get("engine_family")}
-    out: dict[str, Any] = {}
-    explicit = decoded.get("fuel")
-    if explicit in {"diesel", "gasoline"} and decoded.get("fuel_source") in FUEL_SOURCE_NOTE:
-        # Already inferred on an earlier pass; keep the original provenance.
-        out["fuel"] = explicit
-        out["fuel_source"] = decoded["fuel_source"]
-    elif explicit not in {"diesel", "gasoline"}:
-        explicit = _fuel_from_text(
-            " ".join(
-                str(x or "")
-                for x in (
-                    decoded.get("fuel"),
-                    _spec_value(decoded, FUEL_LABELS),
-                    decoded.get("engine_label"),
-                    decoded.get("engine_code"),
-                    decoded.get("trim"),
-                )
-            )
-        )
-    if explicit in {"diesel", "gasoline"} and "fuel" not in out:
-        out["fuel"] = explicit
-        out["fuel_source"] = "decoder"
-    cc = _displacement_cc(decoded)
-    make = str(decoded.get("make") or "").strip().lower()
-    known = KNOWN_ENGINES.get(make, {}).get(cc) if cc else None
-    if known:
-        out["engine_family"] = known["family"]
-        if "fuel" not in out:
-            out["fuel"] = known["fuel"]
-            out["fuel_source"] = "engine-size"
-    if "fuel" not in out:
-        guess = fuel_from_emissions(
-            _spec_value(decoded, CO2_LABELS), _spec_value(decoded, CONSUMPTION_LABELS)
-        )
-        if guess:
-            out["fuel"] = guess
-            out["fuel_source"] = "emissions"
-    if cc:
-        out["displacement_cc"] = cc
-    return out
+def emissions_hint(decoded: dict[str, Any]) -> str | None:
+    """Physics only: what CO2 vs consumption says about the fuel. Passed to the
+    understanding model as evidence; it decides."""
+    guess = fuel_from_emissions(_spec_number(decoded, "co2"), _spec_number(decoded, "consumption", "combined"))
+    if not guess:
+        return None
+    return f"CO2 per litre of fuel points to {guess} (type-approval CO2 vs combined consumption)"
 
 
 def apply_engine_identity(decoded: dict[str, Any]) -> dict[str, Any]:
-    """Write inferred fuel / family onto the decode and into its spec list."""
-    identity = infer_engine_identity(decoded)
-    if not identity:
-        return decoded
-    fuel = identity.get("fuel")
-    if fuel:
-        decoded["fuel"] = fuel
-        decoded["fuel_source"] = identity.get("fuel_source")
-    family = identity.get("engine_family")
-    if family:
-        decoded["engine_family"] = family
-        label = str(decoded.get("engine_label") or "")
-        if not label or re.fullmatch(r"\d\.\d\s*L?", label.strip(), re.I):
-            decoded["engine_label"] = family
-    if identity.get("displacement_cc"):
-        decoded["displacement_cc"] = identity["displacement_cc"]
-        if not decoded.get("displacement_l"):
-            decoded["displacement_l"] = f"{identity['displacement_cc'] / 1000:.1f}"
-    specs = [s for s in (decoded.get("specs") or []) if isinstance(s, dict)]
-    have = {str(s.get("label") or "").lower() for s in specs}
-    if fuel and "fuel type" not in have:
-        note = FUEL_SOURCE_NOTE.get(str(decoded.get("fuel_source")), "inferred")
-        specs.insert(0, {"label": "Fuel type", "value": f"{fuel.title()} ({note})"})
-    if family and "engine" not in have and "engine family" not in have:
-        specs.insert(1 if fuel else 0, {"label": "Engine family", "value": family})
-    decoded["specs"] = specs
+    """Keep provenance straight. The owner's confirmation is the only fuel set here; the
+    understanding model reads everything else (decoder fields, engine size, emissions)."""
+    source = str(decoded.get("fuel_source") or "")
+    if source == "user" and decoded.get("fuel"):
+        pass
+    elif source.startswith("model:") and decoded.get("fuel"):
+        pass
+    elif decoded.get("fuel"):
+        # Either a decoder string ("Diesel", "Benzin") or a stale conclusion cached by an
+        # earlier version. Keep the raw text as evidence; the model draws the conclusion.
+        if not source:
+            decoded["fuel_raw"] = decoded.get("fuel_raw") or decoded["fuel"]
+        decoded["fuel"] = None
+        decoded["fuel_source"] = None
+    hint = emissions_hint(decoded)
+    if hint:
+        decoded["emissions_hint"] = hint
+    raw_cc = decoded.get("displacement_cc") or _spec_number(decoded, "displacement")
+    if raw_cc:
+        digits = re.sub(r"[^\d]", "", str(raw_cc))
+        decoded["displacement_cc"] = int(digits) if digits else None
     return decoded
 
 
@@ -514,10 +378,6 @@ def set_vin_fuel(vin: str, fuel: str) -> dict[str, Any] | None:
         return None
     decoded["fuel"] = fuel
     decoded["fuel_source"] = "user"
-    decoded["specs"] = [
-        s for s in (decoded.get("specs") or [])
-        if str(s.get("label") or "").lower() != "fuel type"
-    ]
     decoded = apply_engine_identity(decoded)
     _store_decode(decoded)
     return decoded
@@ -593,14 +453,7 @@ def from_vincario(payload: dict[str, Any]) -> dict[str, Any] | None:
         except ValueError:
             displacement_l = None
     engine_label = pairs.get("engine type") or pairs.get("engine")
-    fuel = _fuel_from_text(
-        " ".join(
-            str(pairs.get(k) or "")
-            for k in ("fuel type", "fuel", "engine type", "engine")
-        )
-    )
-    if engine_label and fuel and not re.search(r"\d", engine_label):
-        engine_label = f"{displacement_l}L" if displacement_l else engine_label
+    fuel_raw = pairs.get("fuel type") or pairs.get("fuel type - primary") or pairs.get("fuel")
     if not engine_label and displacement_l:
         engine_label = f"{displacement_l}L"
     return {
@@ -613,7 +466,8 @@ def from_vincario(payload: dict[str, Any]) -> dict[str, Any] | None:
         "engine_label": engine_label,
         "displacement_l": displacement_l,
         "displacement_cc": ccm,
-        "fuel": fuel or pairs.get("fuel type") or pairs.get("fuel type - primary") or pairs.get("fuel"),
+        "fuel": None,
+        "fuel_raw": fuel_raw,
         "engine_power_kw": pairs.get("engine power (kw)"),
         "engine_power_hp": pairs.get("engine power (hp)"),
         "drive": pairs.get("drive") or pairs.get("drive type"),
@@ -649,12 +503,8 @@ def from_carsxe(payload: dict[str, Any]) -> dict[str, Any] | None:
         "engine_code": payload.get("engine") or payload.get("engine_model"),
         "engine_label": payload.get("engine") or payload.get("engine_model"),
         "displacement_l": payload.get("displacement") or payload.get("displacement_l"),
-        "fuel": payload.get("fuel_type") or payload.get("fuel") or _fuel_from_text(
-            " ".join(
-                str(payload.get(k) or "")
-                for k in ("fuel_type", "fuel", "engine", "engine_model")
-            )
-        ),
+        "fuel": None,
+        "fuel_raw": payload.get("fuel_type") or payload.get("fuel"),
         "transmission": payload.get("transmission") or payload.get("transmission_style"),
         "trim": payload.get("trim") or payload.get("Trim"),
         "body": payload.get("body") or payload.get("body_class") or payload.get("style"),

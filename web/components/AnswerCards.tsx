@@ -44,7 +44,24 @@ export function AnswerCard({
         </div>
       )}
       <div className="px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap">{answer}</div>
-      {citations.map((c, i) => (
+      {citations.filter((c) => c.kind === "web").length > 0 && (
+        <div className="border-t border-black/5 px-4 py-3">
+          <p className="text-xs font-medium text-ink">From the web (not the factory manual)</p>
+          <ul className="mt-1 space-y-1">
+            {citations
+              .filter((c) => c.kind === "web")
+              .map((c, i) => (
+                <li key={`web-${i}`} className="text-[11px] text-steel">
+                  <a href={c.url} target="_blank" rel="noopener noreferrer" className="underline decoration-black/25 hover:decoration-ink">
+                    {c.title || c.url}
+                  </a>
+                  {c.cited_text ? <span className="block italic">“{c.cited_text}”</span> : null}
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+      {citations.filter((c) => c.kind !== "web").map((c, i) => (
         <div key={i} className="border-t border-black/5 px-4 py-3">
           {c.value_raw && c.kind !== "page" && (
             <div className="font-mono text-xl">{c.value_raw}</div>
@@ -68,17 +85,11 @@ export function AnswerCard({
         </div>
       ))}
       {refused && (
-        <div className="bg-amber-50 px-4 py-2 text-xs">No grounded number in the ingested manual — nothing invented.</div>
+        <div className="bg-amber-50 px-4 py-2 text-xs">No figure could be verified against the manual or a source. Nothing invented.</div>
       )}
       {shop && shop.links.length > 0 && (
         <div className="border-t border-black/10 bg-black/[0.02] px-4 py-3">
-          <p className="text-xs font-medium text-ink">
-            {shop.source === "web"
-              ? `${shop.kind || "Part"} type from the web. Check these shops`
-              : shop.source === "manual"
-                ? `Search this ${shop.kind || "part"} spec on shops that answered`
-                : `Search this ${shop.kind || "part"} by car on shops that answered`}
-          </p>
+          <p className="text-xs font-medium text-ink">Search this item on shops that answered</p>
           <p className="mt-1 text-[11px] text-steel">{shop.note}</p>
           {shop.query && <p className="mt-1 font-mono text-[11px] text-ink">{shop.query}</p>}
           <ul className="mt-2 flex flex-wrap gap-2">

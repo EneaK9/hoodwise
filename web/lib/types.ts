@@ -1,5 +1,8 @@
 export type Citation = {
   kind?: string;
+  url?: string;
+  title?: string;
+  cited_text?: string;
   spec_id?: string;
   part_name?: string;
   value_raw?: string;
@@ -61,6 +64,7 @@ export type ChatResponse = {
   model?: string | null;
   shop?: ShopLinks | null;
   clarify?: Clarify | null;
+  verdict?: Verdict | null;
   needs_fuel?: boolean;
 };
 
@@ -73,9 +77,11 @@ export type ShopLinks = {
   spec: string;
   query: string;
   note: string;
-  source?: "manual" | "web" | "search";
+  source?: "manual" | "web" | "search" | "answer";
   links: ShopLink[];
 };
+
+export type Verdict = { ok: boolean; problems: string[]; shop_item?: string | null; confidence: number };
 
 export type Variant = {
   variant_id: string;

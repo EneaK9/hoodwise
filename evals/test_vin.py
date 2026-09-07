@@ -6,6 +6,7 @@ from app.vin import (
     _wmi_only,
     apply_engine_identity,
     decode_is_complete,
+    emissions_hint,
     find_vins,
     from_api_ninjas,
     from_carsxe,
@@ -13,7 +14,6 @@ from app.vin import (
     from_vincario_market,
     from_vincario_stolen,
     fuel_from_emissions,
-    infer_engine_identity,
     iso_model_year,
     pick_decode,
     vincario_control_sum,
@@ -46,46 +46,38 @@ def test_fuel_from_emissions_separates_diesel_and_petrol() -> None:
     assert fuel_from_emissions("0", "6") is None
 
 
-def test_engine_identity_pins_santa_fe_diesel_without_fuel_field() -> None:
+def test_decode_carries_evidence_for_the_model_not_conclusions() -> None:
     decoded = from_vincario(SANTA_FE_PAYLOAD)
     assert decoded is not None
-    assert decoded["fuel"] is None
-    identity = infer_engine_identity(decoded)
-    assert identity["fuel"] == "diesel"
-    assert identity["fuel_source"] == "engine-size"
-    assert identity["engine_family"] == "2.0 CRDi"
+    assert decoded["fuel"] is None  # no fuel field from Vincario, and no table guessing here
     decoded = apply_engine_identity(decoded)
-    assert decoded["fuel"] == "diesel"
-    assert decoded["engine_label"] == "2.0 CRDi"
-    assert decoded["specs"][0]["label"] == "Fuel type"
-    assert "engine size" in decoded["specs"][0]["value"]
-    # A second pass keeps the original provenance.
-    assert infer_engine_identity(decoded)["fuel_source"] == "engine-size"
+    assert decoded["displacement_cc"] == 1995
+    assert "diesel" in decoded["emissions_hint"]
+    assert emissions_hint({"specs": [{"label": "CO2 Emission (g/km)", "value": "139"}, {"label": "Fuel Consumption Combined (l/100km)", "value": "6"}]}).startswith("CO2 per litre of fuel points to gasoline")
+    assert emissions_hint({"specs": []}) is None
 
 
-def test_engine_identity_falls_back_to_emissions_for_unknown_size() -> None:
-    decoded = {
-        "make": "Hyundai",
-        "model": "Santa Fe",
-        "specs": [
-            {"label": "Engine Displacement (ccm)", "value": "1598"},
-            {"label": "Fuel Consumption Combined (l/100km)", "value": "4.5"},
-            {"label": "CO2 Emission (g/km)", "value": "119"},
-        ],
-    }
-    identity = infer_engine_identity(decoded)
-    assert identity["fuel"] == "diesel"
-    assert identity["fuel_source"] == "emissions"
-    assert "engine_family" not in identity
+def test_decoder_fuel_strings_stay_raw_until_the_model_reads_them() -> None:
+    decoded = from_vincario({
+        "decode": [
+            {"label": "Make", "value": "Hyundai"},
+            {"label": "Model", "value": "Santa Fe"},
+            {"label": "Model Year", "value": "2016"},
+            {"label": "Fuel Type", "value": "Diesel"},
+        ]
+    })
+    assert decoded is not None
+    assert decoded["fuel"] is None
+    assert decoded["fuel_raw"] == "Diesel"
 
 
-def test_user_confirmation_beats_every_inference() -> None:
+def test_user_confirmation_is_the_only_fuel_set_in_code() -> None:
     decoded = from_vincario(SANTA_FE_PAYLOAD)
     assert decoded is not None
     decoded["fuel"] = "gasoline"
     decoded["fuel_source"] = "user"
-    identity = infer_engine_identity(decoded)
-    assert identity == {"fuel": "gasoline", "fuel_source": "user", "engine_family": None}
+    out = apply_engine_identity(decoded)
+    assert out["fuel"] == "gasoline" and out["fuel_source"] == "user"
 
 
 def test_pattern_us_civic_15t() -> None:
@@ -206,7 +198,8 @@ def test_vincario_payload_maps_make_model() -> None:
     assert decoded["model"] == "Santa Fe"
     assert decoded["year"] == 2016
     assert decoded["engine_label"] == "2.0L"
-    assert decoded["fuel"] == "diesel"
+    assert decoded["fuel"] is None
+    assert decoded["fuel_raw"] == "Diesel"
     assert any(s["label"] == "Engine Displacement (ccm)" for s in decoded["specs"])
     assert all(s["label"] != "VIN" for s in decoded["specs"])
     assert decode_is_complete(decoded)

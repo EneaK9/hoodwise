@@ -12,11 +12,10 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.answer import generate_answer
-from app.clarify import clarification
-from app.intent import part_kind
+from app.retrieval import retrieve
 from app.shop import shop_links
 from app.snippets import attach_snippets, render_snippet, snippet_needles
-from app.resolve import model_year_ranges, public_vehicle, resolve_vehicle, vehicle_catalog_with_years
+from app.resolve import public_vehicle, resolve_vehicle, vehicle_catalog_with_years
 from app.understand import mention_dict, understand
 from app.auth import (
     COOKIE_NAME,
@@ -393,7 +392,15 @@ def _citations(result: dict) -> list[dict]:
 
 
 def _cited(result: dict, question: str) -> list[dict]:
-    return attach_snippets(_citations(result), question, result.get("answer") or "", result.get("retrieved") or {})
+    cited = attach_snippets(_citations(result), question, result.get("answer") or "", result.get("retrieved") or {})
+    for w in result.get("web_sources") or []:
+        cited.append({
+            "kind": "web",
+            "url": w.get("url"),
+            "title": w.get("title") or w.get("url"),
+            "cited_text": (w.get("cited_text") or "")[:400],
+        })
+    return cited
 
 
 def _previous_user_message(session_id: str | None, turns: int = 3) -> str:
@@ -417,7 +424,8 @@ def _clarify_result(ask: dict, kind: str) -> dict:
         "answer": ask["ask"],
         "refused": False,
         "clarify": {"missing": ask["missing"], "options": ask["options"]},
-        "retrieved": {"mode": "clarify", "numeric": False, "specs": [], "chunks": [], "kind": kind},
+        "retrieved": {"mode": "clarify", "specs": [], "chunks": [], "kind": kind},
+        "web_sources": [],
         "model": None,
         "shop": None,
     }
@@ -429,66 +437,64 @@ def _run_chat(body: ChatIn, request: Request, user: dict | None) -> tuple[str, d
     session_vin = _session_vin(body.session_id)
 
     # 1. The VIN, if any, pins the car before anything is interpreted.
-    pinned = resolve_vehicle(body.message, body.vin, session_vin, context=context, mention={})
+    pinned = resolve_vehicle(body.message, body.vin, session_vin)
     pinned_vehicle = public_vehicle(pinned.get("decoded")) if pinned.get("vin") else None
 
-    # 2. The model reads the question: part, car from text, what is missing, what to ask.
+    # 2. The model reads the question: part, car and engine, what is missing, what to ask.
     understanding = understand(body.message, context, pinned_vehicle, vehicle_catalog_with_years())
-    if understanding is not None:
-        kind = understanding.part if understanding.part != "other" else ""
-        mention = mention_dict(understanding)
-        resolved = pinned if pinned.get("vin") else resolve_vehicle(
-            body.message, body.vin, session_vin, context=context, mention=mention or {}
+    if understanding is None:
+        session_id = _ensure_session(body, user, pinned.get("variant_id") or body.variant_id, pinned.get("vin"))
+        result = _clarify_result(
+            {"missing": "other", "ask": "I could not read that. Which car is it, and what do you want to know?", "options": []},
+            "",
         )
-        vehicle = public_vehicle(resolved.get("decoded"))
-        ask = None
-        if understanding.missing and understanding.ask:
-            ask = {"missing": understanding.missing[0], "ask": understanding.ask, "options": understanding.options}
-        search_text = understanding.search_query or None
-        restated = understanding.restated
-    else:
-        # Offline fallback: regex heuristics.
-        kind = part_kind(body.message, context)
-        resolved = resolve_vehicle(body.message, body.vin, session_vin, context=context)
-        vehicle = public_vehicle(resolved.get("decoded"))
-        ask = clarification(body.message, vehicle, kind, context, year_ranges=model_year_ranges)
-        search_text = None
-        restated = ""
+        message_id = _store_turn(session_id, body.message, result)
+        return session_id, result, pinned_vehicle, find_vins(body.message), message_id
 
+    mention = mention_dict(understanding) or {
+        "engine": understanding.vehicle.engine,
+        "fuel": understanding.vehicle.fuel,
+        "fuel_basis": understanding.vehicle.fuel_basis,
+        "displacement_l": understanding.vehicle.displacement_l,
+        "manual_id": understanding.manual_id,
+    }
+    resolved = resolve_vehicle(body.message, body.vin, session_vin, mention=mention)
+    vehicle = public_vehicle(resolved.get("decoded"))
+    kind = understanding.part
     session_id = _ensure_session(body, user, resolved.get("variant_id") or body.variant_id, resolved.get("vin"))
-    if ask:
+
+    # 3. Ask before guessing.
+    if understanding.missing and understanding.ask:
+        ask = {"missing": understanding.missing[0], "ask": understanding.ask, "options": understanding.options}
         result = _clarify_result(ask, kind)
         message_id = _store_turn(session_id, body.message, result)
-        log.info("chat clarify missing=%s kind=%s", ask["missing"], kind or "-")
+        log.info("chat clarify missing=%s part=%s", ask["missing"], kind or "-")
         return session_id, result, vehicle, find_vins(body.message), message_id
+
+    # 4. Retrieve whole manual pages for the cleaned phrase, scoped to the pinned car.
+    retrieved = retrieve(
+        understanding.search_query or body.message,
+        resolved.get("variant_id") or body.variant_id,
+        vehicle_id=resolved.get("vehicle_id"),
+    )
+    retrieved["kind"] = kind
+
+    # 5. Draft with manual + web search, verify, refuse if unsupported.
     result = generate_answer(
         body.message,
-        resolved.get("variant_id") or body.variant_id,
-        hints=resolved.get("hints") or [],
-        vehicle=vehicle,
-        vehicle_id=resolved.get("vehicle_id"),
-        kind=kind,
+        retrieved,
+        vehicle,
         context=context,
-        search_text=search_text,
-        restated=restated,
+        restated=understanding.restated,
+        web_query=understanding.web_query,
     )
-    if result.get("refused"):
-        result["shop"] = None
-    else:
-        result["shop"] = shop_links(
-            body.message,
-            result.get("retrieved") or {},
-            vehicle,
-            result.get("answer") or "",
-            context=context,
-            kind=kind if understanding is not None else None,
-        )
+    verdict = result.get("verdict") or {}
+    result["shop"] = None if result.get("refused") else shop_links(verdict.get("shop_item"))
     message_id = _store_turn(session_id, body.message, result)
     log.info(
-        "chat ok source=%s kind=%s fuel=%s",
-        (resolved.get("decoded") or {}).get("source"),
-        kind or "-",
-        (vehicle or {}).get("fuel") or "-",
+        "chat ok source=%s part=%s fuel=%s refused=%s",
+        (resolved.get("decoded") or {}).get("source"), kind or "-",
+        (vehicle or {}).get("fuel") or "-", result.get("refused"),
     )
     return session_id, result, vehicle, find_vins(body.message), message_id
 
@@ -502,6 +508,7 @@ def chat(body: ChatIn, request: Request, user: dict | None = Depends(current_use
         "answer": result["answer"],
         "refused": result["refused"],
         "mode": result["retrieved"]["mode"],
+        "verdict": result.get("verdict"),
         "citations": _cited(result, body.message),
         "detected_vins": detected,
         "vehicle": vehicle,

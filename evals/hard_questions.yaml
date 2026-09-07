@@ -1,0 +1,100 @@
+# Hard eval set. Ground truth read from the ingested manual text (page numbers noted).
+# Fields:
+#   question / vin / context (previous user turns, " | " separated)
+#   expect: substrings that MUST appear in a non-refused answer (each one is a positive)
+#   forbid: substrings that MUST NOT appear (each occurrence is a false positive)
+#   expect_clarify: true when the right move is to ask back instead of answering
+#   expect_refuse: true when the right move is to refuse
+questions:
+  # --- Santa Fe DM 2016-2018 owner manual, capacity table p.792-793 ---
+  - id: sf-diesel-oil-vin
+    question: how much engine oil does my car take
+    vin: KMHSW81UBGU585399
+    expect: ["6.3"]
+    forbid: ["4.8 l", "4.8 L", "4.8 litre", "API SM", "ILSAC", "ACEA A5"]
+  - id: sf-diesel-oil-text-typos
+    question: How many litters of oil i need to chang the oil of my hyundai santa fe 2016 2.0 liter diesel
+    expect: ["6.3"]
+    forbid: ["4.8 l", "4.8 L", "4.8 litre", "API SM", "ILSAC"]
+  - id: sf-petrol-oil-text
+    question: engine oil capacity for a 2016 hyundai santa fe 2.4 petrol europe
+    expect: ["4.8"]
+    forbid: ["6.3"]
+  - id: sf-coolant-diesel-r20
+    question: coolant capacity for my 2016 santa fe 2.0 crdi diesel
+    expect: ["7.8"]
+    forbid: ["7.1 l", "9.1"]
+  - id: sf-atf-petrol-24
+    question: how much automatic transmission fluid does a 2017 santa fe 2.4 gasoline take
+    expect: ["7.1"]
+    forbid: ["7.8 l"]
+  - id: sf-mtf
+    question: manual gearbox oil quantity and grade santa fe 2016
+    context: "it is the 2.0 diesel with a manual transmission"
+    expect: ["1.8", "GL-4", "70W"]
+    forbid: []
+  - id: sf-fuel-tank
+    question: si eshte kapaciteti i rezervuarit te karburantit te santa fe 2016 dizel
+    expect: ["64"]
+    forbid: []
+  - id: sf-tyre-pressure
+    question: tyre pressure for 235/65R17 on a 2016 santa fe
+    vin: KMHSW81UBGU585399
+    expect: ["33"]
+    forbid: []
+  - id: sf-wheel-nut-torque
+    question: wheel nut torque
+    vin: KMHSW81UBGU585399
+    # p.649 prints 11~13 kgf.m (79~94 lbf.ft); p.789 prints the same as 107~127 N·m
+    expect: []
+    expect_any: [["107", "11-13", "79-94"]]
+    forbid: []
+  - id: sf-axle-oil
+    question: rear differential oil grade and amount for the 4WD 2.0 diesel santa fe 2016
+    expect: ["GL-5", "75W"]
+    forbid: ["3.3L 0.65"]
+  # --- Kona 2017-2023 owner manual, p.30-31, litre glyph is mangled in the text layer ---
+  - id: kona-fuel-tank-glyph
+    question: fuel tank capacity hyundai kona 2018 petrol
+    expect: ["50"]
+    forbid: ["38 "]
+  - id: kona-urea
+    question: how much urea (AdBlue) does a 2019 kona diesel hold
+    expect: ["12"]
+    forbid: []
+  # --- Civic FC/FK 2016-2021 service manual, golden torque rows with variant traps ---
+  - id: civic-brake-hose-except-typer
+    question: front brake hose banjo bolt torque for a 2018 honda civic 1.5 turbo (not the Type R)
+    expect: ["35"]
+    forbid: []
+  - id: civic-typer-brake-line
+    question: front brake line flare nut torque on a 2019 civic type r
+    expect: ["15"]
+    forbid: []
+  - id: civic-bleed-si
+    question: front caliper bleed screw torque, 2018 civic si
+    expect: ["8.5"]
+    forbid: ["8.4"]
+  # --- Must ask back ---
+  - id: ask-vague
+    question: what type
+    expect_clarify: true
+  - id: ask-no-car
+    question: how much oil should i put in my car
+    expect_clarify: true
+  - id: ask-year
+    question: how many liters of oil for my hyundai santa fe diesel
+    expect_clarify: true
+  - id: ask-fuel
+    question: how many liters of engine oil for my 2016 hyundai santa fe
+    expect_clarify: true
+  # --- Must not answer the wrong car ---
+  - id: wrong-make-with-vin
+    question: what is the oil capacity of my toyota corolla
+    vin: KMHSW81UBGU585399
+    expect_clarify_or_refuse: true
+  # --- No car needed ---
+  - id: definition
+    question: what does DPF mean
+    expect: ["particulate"]
+    forbid: []

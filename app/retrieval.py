@@ -1,4 +1,8 @@
-"""Hybrid retrieval: spec SQL + pgvector/tsvector reciprocal rank fusion."""
+"""Hybrid retrieval: spec rows by SQL plus chunk search by pgvector and tsvector.
+
+The search phrase comes from the understanding model, already cleaned. Retrieval does
+no interpretation of its own: no stop lists, no topic tables, no special cases per part.
+"""
 
 from __future__ import annotations
 
@@ -6,90 +10,27 @@ import re
 from typing import Any
 
 from app.config import settings
-from app.db import fetch_all, fetch_one
-from app.resolve import PART_PHRASES
+from app.db import fetch_all
 from ingestion.embed import embed_texts
 
 
-def _spec_blob(row: dict[str, Any]) -> str:
-    return " ".join(
-        str(row.get(k) or "")
-        for k in ("part_name", "raw_context", "condition_note", "value_raw", "section_name")
-    ).lower()
+def _terms(phrase: str) -> list[str]:
+    return [w for w in re.findall(r"[A-Za-z0-9./-]+", phrase or "") if len(w) > 1][:12]
 
 
-def filter_specs_for_hints(rows: list[dict[str, Any]], hints: list[str]) -> list[dict[str, Any]]:
-    if not hints or not rows:
-        return rows
-    kept: list[dict[str, Any]] = []
-    for row in rows:
-        blob = _spec_blob(row)
-        cond = (row.get("condition_note") or "").lower()
-        if "typer" in hints and "except type" in blob:
-            continue
-        if "si" in hints and "except si" in blob:
-            continue
-        if "typer" in hints and "type-r" not in blob and "type r" not in blob and "2.0" in hints:
-            # Type-R still sees generic rows that have no variant tag
-            pass
-        if "1.5" in hints and "2.0" not in hints and re.search(r"2\.0\s*l", blob) and "1.5" not in cond:
-            if "1.5" not in blob:
-                continue
-        if "2.0" in hints and "1.5" not in hints and re.search(r"1\.5\s*l", cond) and "2.0" not in blob:
-            continue
-        kept.append(row)
-    return kept or rows
-
-NUMERIC_HINT = re.compile(
-    r"\b(torque|n[·.]?m|lbf|capacity|clearance|spec|ft-?lb|tighten|oil|litre|liter|quart|fluid)\b",
-    re.IGNORECASE,
-)
-
-
-def is_numeric_query(question: str) -> bool:
-    return bool(NUMERIC_HINT.search(question))
-
-
-def _keywords(question: str) -> list[str]:
-    stop = {
-        "what", "is", "the", "a", "an", "for", "on", "of", "to", "in", "and",
-        "or", "how", "do", "does", "with", "from", "this", "that", "these",
-        "those", "my", "your", "car", "take", "much", "please", "need",
-        "want", "tell", "me", "it", "its", "about", "many", "needs", "needed",
-        "should", "use", "which", "kind", "are", "there", "can", "get", "some",
-        "any", "type", "types", "refill", "put", "into", "vehicle", "recommended",
-        "right", "correct", "good", "best", "buy", "have", "has", "when", "where",
-        "who", "why", "will", "would", "could", "know", "give", "show", "find",
-    }
-    words = re.findall(r"[A-Za-z0-9./-]+", question.lower())
-    return [w for w in words if w not in stop and len(w) > 1][:8]
-
-
-def _ts_or_query(question: str) -> str:
-    keys = [re.sub(r"[^a-z0-9]+", "", k) for k in _keywords(question)]
+def _ts_or_query(phrase: str) -> str:
+    keys = [re.sub(r"[^a-z0-9]+", "", k.lower()) for k in _terms(phrase)]
     keys = [k for k in keys if k]
-    if keys:
-        return " | ".join(keys)
-    words = [re.sub(r"[^a-z0-9]+", "", w) for w in question.lower().split()]
-    words = [w for w in words if len(w) > 2]
-    return " | ".join(words[:4]) if words else "specification"
+    return " | ".join(keys) if keys else "specification"
 
 
-def search_vehicle_id(vehicle_id: str | None) -> str | None:
-    """No pinned car means no filter. Never silently substitute another vehicle."""
-    return vehicle_id or None
-
-
-def lookup_specs(
-    question: str,
-    variant_id: str | None,
-    limit: int = 8,
-    vehicle_id: str | None = None,
-) -> list[dict[str, Any]]:
-    keys = _keywords(question)
-    like_terms = [f"%{k}%" for k in keys[:8]] or ["%torque%"]
-    vid = search_vehicle_id(vehicle_id)
-    sql = """
+def lookup_specs(phrase: str, variant_id: str | None, limit: int = 6, vehicle_id: str | None = None) -> list[dict[str, Any]]:
+    keys = _terms(phrase)
+    if not keys:
+        return []
+    like_terms = [f"%{k}%" for k in keys]
+    rows = fetch_all(
+        """
         SELECT s.id, s.part_name, s.spec_type, s.value_raw, s.value_nm, s.unit,
                s.condition_note, s.replace_required, s.torque_sequence, s.page_number,
                s.crop_path, s.verification_status, s.raw_context,
@@ -101,55 +42,28 @@ def lookup_specs(
                  @@ websearch_to_tsquery('english', %s)
                OR s.part_name ILIKE ANY(%s)
                OR s.raw_context ILIKE ANY(%s)
-               OR coalesce(s.condition_note,'') ILIKE ANY(%s)
-               OR s.value_raw ILIKE ANY(%s)
               )
            AND (s.variant_id IS NULL OR %s::uuid IS NULL OR s.variant_id = %s::uuid)
            AND (%s::uuid IS NULL OR d.vehicle_id = %s::uuid)
          ORDER BY s.verification_status = 'flagged', s.page_number
          LIMIT %s
-    """
-    rows = fetch_all(
-        sql,
-        (
-            question,
-            like_terms,
-            like_terms,
-            like_terms,
-            like_terms,
-            variant_id,
-            variant_id,
-            vid,
-            vid,
-            limit * 4,
-        ),
+        """,
+        (phrase, like_terms, like_terms, variant_id, variant_id, vehicle_id, vehicle_id, limit * 4),
     )
     scored: list[tuple[int, dict]] = []
+    lowered = [k.lower() for k in keys]
     for row in rows:
-        blob = _spec_blob(row)
-        score = sum(1 for k in keys if k in blob)
-        qlow = question.lower()
-        for phrase in PART_PHRASES:
-            if phrase in qlow and phrase in blob:
-                score += 3
+        blob = " ".join(str(row.get(k) or "") for k in ("part_name", "raw_context", "condition_note", "value_raw")).lower()
+        score = sum(1 for k in lowered if k in blob)
         if score:
             scored.append((score, row))
     scored.sort(key=lambda item: item[0], reverse=True)
     return [row for _, row in scored[:limit]]
 
 
-def _keyword_chunks(
-    question: str,
-    limit: int = 12,
-    vehicle_id: str | None = None,
-    extra_terms: list[str] | None = None,
-) -> list[dict[str, Any]]:
-    vid = search_vehicle_id(vehicle_id)
-    ts_q = _ts_or_query(question)
-    likes = [f"%{k}%" for k in _keywords(question)[:8]]
-    likes += [f"%{t}%" for t in (extra_terms or []) if len(t) >= 3]
-    if not likes:
-        likes = ["%specification%"]
+def _keyword_chunks(phrase: str, limit: int, vehicle_id: str | None) -> list[dict[str, Any]]:
+    ts_q = _ts_or_query(phrase)
+    likes = [f"%{k}%" for k in _terms(phrase)] or ["%specification%"]
     return fetch_all(
         """
         SELECT c.id, c.page_number, c.section_path, c.chunk_type, c.content,
@@ -157,26 +71,22 @@ def _keyword_chunks(
                ts_rank_cd(c.tsv, to_tsquery('english', %s)) AS rank
           FROM chunks c
           JOIN documents d ON d.id = c.document_id
-         WHERE (
-                 c.tsv @@ to_tsquery('english', %s)
-              OR c.content ILIKE ANY(%s)
-              )
+         WHERE (c.tsv @@ to_tsquery('english', %s) OR c.content ILIKE ANY(%s))
            AND (%s::uuid IS NULL OR d.vehicle_id = %s::uuid)
          ORDER BY rank DESC NULLS LAST
          LIMIT %s
         """,
-        (ts_q, ts_q, likes, vid, vid, limit),
+        (ts_q, ts_q, likes, vehicle_id, vehicle_id, limit),
     )
 
 
-def _vector_chunks(question: str, limit: int = 12, vehicle_id: str | None = None) -> list[dict[str, Any]]:
+def _vector_chunks(phrase: str, limit: int, vehicle_id: str | None) -> list[dict[str, Any]]:
     if not settings.openai_api_key:
         return []
     try:
-        vec = embed_texts([question])[0]
+        vec = embed_texts([phrase])[0]
     except Exception:
         return []
-    vid = search_vehicle_id(vehicle_id)
     return fetch_all(
         """
         SELECT c.id, c.page_number, c.section_path, c.chunk_type, c.content,
@@ -189,213 +99,84 @@ def _vector_chunks(question: str, limit: int = 12, vehicle_id: str | None = None
          ORDER BY c.embedding <=> %s::vector
          LIMIT %s
         """,
-        (vec, vid, vid, vec, limit),
+        (vec, vehicle_id, vehicle_id, vec, limit),
     )
 
 
-def _rrf(keyword: list[dict], vector: list[dict], k: int = 60, limit: int = 8) -> list[dict[str, Any]]:
-    scores: dict[str, float] = {}
-    rows: dict[str, dict] = {}
-    for rank, row in enumerate(keyword, start=1):
-        cid = str(row["id"])
-        scores[cid] = scores.get(cid, 0.0) + 1.0 / (k + rank)
-        rows[cid] = row
-    for rank, row in enumerate(vector, start=1):
-        cid = str(row["id"])
-        scores[cid] = scores.get(cid, 0.0) + 1.0 / (k + rank)
-        rows[cid] = row
-    ordered = sorted(scores, key=lambda cid: scores[cid], reverse=True)[:limit]
-    out = []
-    for cid in ordered:
-        row = dict(rows[cid])
-        row["rrf"] = scores[cid]
-        out.append(row)
+def _rrf_pages(keyword: list[dict], vector: list[dict], k: int = 60, limit: int = 6) -> list[tuple[str, int]]:
+    """Reciprocal rank fusion at page level: every chunk of a page adds to that page's
+    score, so a table page with several matching fragments beats a page with one."""
+    scores: dict[tuple[str, int], float] = {}
+    for ranked in (keyword, vector):
+        for rank, row in enumerate(ranked, start=1):
+            if row.get("page_number") is None:
+                continue
+            key = (str(row.get("doc_id")), int(row["page_number"]))
+            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank)
+    return sorted(scores, key=lambda key: scores[key], reverse=True)[:limit]
+
+
+def _with_neighbours(pages: list[tuple[str, int]], top: int = 2) -> list[tuple[str, int]]:
+    """Specification tables run across page breaks; bring the page before and after the
+    best hits. Structural, not vocabulary."""
+    out = list(pages)
+    for doc, page in pages[:top]:
+        for neighbour in (page - 1, page + 1):
+            if neighbour >= 1 and (doc, neighbour) not in out:
+                out.append((doc, neighbour))
     return out
 
 
-def _topic_rank(chunks: list[dict[str, Any]], terms: list[str]) -> list[dict[str, Any]]:
-    """Stable re-rank: chunks that mention the asked-about part come first."""
-    if not terms:
-        return chunks
-    patterns = [re.compile(rf"\b{re.escape(t)}\b", re.I) for t in terms if len(t) >= 3]
-
-    def hits(row: dict[str, Any]) -> int:
-        text = row.get("content") or ""
-        return sum(1 for p in patterns if p.search(text))
-
-    return sorted(chunks, key=hits, reverse=True)
-
-
-def search_chunks(
-    question: str,
-    limit: int = 8,
-    vehicle_id: str | None = None,
-    hints: list[str] | None = None,
-    kind: str = "",
-) -> list[dict[str, Any]]:
-    from app.intent import topic_terms
-
-    terms = topic_terms(kind) if kind else []
-    keyword = _keyword_chunks(question, limit=12, vehicle_id=vehicle_id, extra_terms=terms)
-    vector = _vector_chunks(question, limit=12, vehicle_id=vehicle_id)
-    if not vector:
-        merged = keyword[:limit]
-    elif not keyword:
-        merged = vector[:limit]
-    else:
-        merged = _rrf(keyword, vector, limit=limit)
-    if _is_capacity_query(question) and kind in {"engine oil", "coolant", "ATF", "brake fluid", ""}:
-        merged = _prefer_capacity_chunks(
-            merged, vehicle_id=vehicle_id, limit=limit, hints=hints
-        )
-    elif terms:
-        merged = _topic_rank(merged, terms)
-    return merged
-
-
-LITRE_RE = re.compile(r"\d+(?:[.,]\d+)?\s*l\b", re.IGNORECASE)
-CAPACITY_HINT = re.compile(
-    r"\b(oil|coolant|capacit|lubricant|fluid|litre|liter|quart|fuel)\b",
-    re.IGNORECASE,
-)
-
-
-def _is_capacity_query(question: str) -> bool:
-    q = question.lower()
-    return bool(CAPACITY_HINT.search(q)) and bool(
-        re.search(r"\b(how much|capacit|take|fill|litre|liter|quart|oil|coolant|fuel)\b", q)
-    )
-
-
-def _capacity_chunks(vehicle_id: str | None, limit: int = 40) -> list[dict[str, Any]]:
-    vid = search_vehicle_id(vehicle_id)
-    return fetch_all(
-        """
-        SELECT c.id, c.page_number, c.section_path, c.chunk_type, c.content,
-               d.doc_id, d.section_name
-          FROM chunks c
-          JOIN documents d ON d.id = c.document_id
-         WHERE (%s::uuid IS NULL OR d.vehicle_id = %s::uuid)
-           AND (
-                 c.content ILIKE '%%US qt%%'
-              OR c.content ~* '[0-9]+([.,][0-9]+)?\\s*l\\s*\\('
-               )
-         ORDER BY
-           (c.content ILIKE '%%engine oil%%')::int DESC,
-           (c.content ILIKE '%%US qt%%')::int DESC,
-           c.page_number,
-           c.id
-         LIMIT %s
-        """,
-        (vid, vid, limit),
-    )
-
-
-def _merge_page_chunks(chunks: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    groups: dict[tuple[Any, Any], dict[str, Any]] = {}
-    order: list[tuple[Any, Any]] = []
-    for chunk in chunks:
-        key = (chunk.get("doc_id"), chunk.get("page_number"))
-        if key not in groups:
-            groups[key] = dict(chunk)
-            order.append(key)
-            continue
-        existing = groups[key].get("content") or ""
-        extra = chunk.get("content") or ""
-        if extra and extra not in existing:
-            # A full capacity table page runs past 4000 chars; cutting it drops rows.
-            groups[key]["content"] = (existing + "\n" + extra)[:12000]
-    return [groups[key] for key in order]
-
-
-def _chunks_on_pages(
-    vehicle_id: str | None, pages: list[int], doc_ids: list[str]
-) -> list[dict[str, Any]]:
-    if not pages:
+def _whole_pages(vehicle_id: str | None, keys: list[tuple[str, int]]) -> list[dict[str, Any]]:
+    """Give the model whole pages, not fragments: a table row and its header often live in
+    different chunks. Keeps the given order, merges every chunk of each page."""
+    if not keys:
         return []
-    vid = search_vehicle_id(vehicle_id)
-    return fetch_all(
+    pages = [k[1] for k in keys]
+    docs = sorted({k[0] for k in keys if k[0]})
+    rows = fetch_all(
         """
-        SELECT c.id, c.page_number, c.section_path, c.chunk_type, c.content,
-               d.doc_id, d.section_name
-          FROM chunks c
-          JOIN documents d ON d.id = c.document_id
+        SELECT c.id, c.page_number, c.section_path, c.chunk_type, c.content, d.doc_id, d.section_name
+          FROM chunks c JOIN documents d ON d.id = c.document_id
          WHERE (%s::uuid IS NULL OR d.vehicle_id = %s::uuid)
-           AND c.page_number = ANY(%s)
-           AND (%s::text[] IS NULL OR d.doc_id = ANY(%s))
+           AND c.page_number = ANY(%s) AND d.doc_id = ANY(%s)
          ORDER BY c.page_number, c.id
         """,
-        (vid, vid, pages, doc_ids or None, doc_ids or None),
+        (vehicle_id, vehicle_id, pages, docs),
     )
-
-
-def score_capacity_chunk(text: str, hints: list[str] | None = None) -> int:
-    hints = hints or []
-    score = 3
-    diesel_row = bool(re.search(r"\b(diesel|dpf|crdi)\b", text, re.I))
-    gas_row = bool(re.search(r"\b(gasoline|petrol)\b", text, re.I))
-    if re.search(r"engine oil", text, re.I):
-        score += 6
-    if re.search(r"API Service|ILSAC|ACEA", text, re.I):
-        score += 3
-    if re.search(r"lubricant", text, re.I):
-        score += 1
-    if diesel_row:
-        score += 4
-    if "diesel" in hints:
-        if diesel_row:
-            score += 8
-        elif gas_row:
-            score -= 6
-    if "gasoline" in hints:
-        if gas_row:
-            score += 8
-        elif diesel_row:
-            score -= 6
-    disp = next((h for h in hints if re.fullmatch(r"\d\.\d", h)), None)
-    if disp:
-        others = {m for m in re.findall(r"\b(\d\.\d)\s*L\b", text, re.I)} - {disp}
-        if others and not re.search(rf"\b{re.escape(disp)}\b", text):
-            score -= 3
-        if re.search(rf"\bR{re.escape(disp)}\b|{re.escape(disp)}\s*L?\s+CRDi", text, re.I):
-            score += 3
-    return score
-
-
-def _prefer_capacity_chunks(
-    chunks: list[dict[str, Any]],
-    vehicle_id: str | None,
-    limit: int,
-    hints: list[str] | None = None,
-) -> list[dict[str, Any]]:
-    volume_hits = _capacity_chunks(vehicle_id)
-    pages = sorted({int(row["page_number"]) for row in volume_hits if row.get("page_number") is not None})
-    doc_ids = sorted({str(row["doc_id"]) for row in volume_hits if row.get("doc_id")})
-    page_chunks = _chunks_on_pages(vehicle_id, pages, doc_ids) if pages else []
-    combined = _merge_page_chunks(page_chunks + volume_hits + list(chunks))
-    scored: list[tuple[int, dict[str, Any]]] = []
-    for row in combined:
-        text = row.get("content") or ""
-        has_vol = bool(LITRE_RE.search(text) or re.search(r"US qt", text, re.I))
-        if not has_vol:
-            continue
-        score = score_capacity_chunk(text, hints or [])
-        scored.append((score, row))
-    scored.sort(key=lambda item: item[0], reverse=True)
-    preferred = [row for _, row in scored[:limit]]
-    return preferred or chunks[:limit]
+    merged: dict[tuple, dict[str, Any]] = {}
+    for r in rows:
+        key = (str(r["doc_id"]), int(r["page_number"]))
+        if key not in merged:
+            merged[key] = dict(r)
+        elif r["content"] and r["content"] not in merged[key]["content"]:
+            merged[key]["content"] = (merged[key]["content"] + "\n" + r["content"])[:20000]
+    return [merged[k] for k in keys if k in merged]
 
 
 def retrieve(
-    question: str,
+    phrase: str,
     variant_id: str | None,
-    hints: list[str] | None = None,
     vehicle_id: str | None = None,
-    kind: str = "",
+    limit: int = 8,
 ) -> dict[str, Any]:
-    numeric = is_numeric_query(question)
-    specs = lookup_specs(question, variant_id, limit=8 if numeric else 4, vehicle_id=vehicle_id)
-    specs = filter_specs_for_hints(specs, hints or [])
-    chunks = search_chunks(question, vehicle_id=vehicle_id, hints=hints, kind=kind)
-    mode = "sql_spec" if numeric and specs else "hybrid"
-    return {"mode": mode, "numeric": numeric, "specs": specs, "chunks": chunks, "kind": kind}
+    specs = lookup_specs(phrase, variant_id, limit=limit, vehicle_id=vehicle_id)
+    keyword = _keyword_chunks(phrase, limit=16, vehicle_id=vehicle_id)
+    vector = _vector_chunks(phrase, limit=16, vehicle_id=vehicle_id)
+    pages = _with_neighbours(_rrf_pages(keyword, vector, limit=limit))
+    chunks = _whole_pages(vehicle_id, pages)
+    manual = None
+    if vehicle_id:
+        from app.db import fetch_one
+
+        manual = fetch_one(
+            """
+            SELECT v.make, v.model, v.year_from, v.year_to,
+                   string_agg(DISTINCT d.doc_id, ', ') AS doc_ids,
+                   string_agg(DISTINCT d.section_name, ', ') AS titles
+              FROM vehicles v LEFT JOIN documents d ON d.vehicle_id = v.id
+             WHERE v.id = %s GROUP BY v.id
+            """,
+            (vehicle_id,),
+        )
+    return {"mode": "hybrid", "specs": specs, "chunks": chunks, "query": phrase, "manual": dict(manual) if manual else None}

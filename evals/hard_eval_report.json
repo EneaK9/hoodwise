@@ -1,0 +1,425 @@
+{
+ "precision": 1.0,
+ "recall": 0.9583333333333334,
+ "f1": 0.9787234042553191,
+ "rows": [
+  {
+   "id": "sf-diesel-oil-vin",
+   "seconds": 58.1,
+   "answer": "**Engine oil capacity — from the manual**\n\nYour 2016 Santa Fe is the 2.0 diesel (R2.0). In the capacities table the owner handbook prints, for the diesel engine with DPF: **6.3 l (6.66 US qt.)** (p.792). The table lists a single diesel engine-oil figure — it does not print separate R2.0 / R2.2 rows for oil, and it does not say whether the figure includes the oil filter.\n\nThe other figures on that page (4.6 / 4.8 l) belong to the gasoline rows, so they are not your car's.\n\nSource: Hyundai Santa Fe (DM) 2016–2018 **owner handbook** (not a workshop manual), p.792, with the footnotes on p.793 (*6 = Diesel Particulate Filter).\n\nPractical note: fill to the middle of the dipstick range rather than trusting the litre figure alone.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2016 Hyundai Santa Fe Wagon 2.0 CRDi diesel",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": null,
+    "confidence": 0.75
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [
+    "mentions '4.8 l' only to exclude it",
+    "mentions '4.8 L' only to exclude it"
+   ],
+   "question": "how much engine oil does my car take"
+  },
+  {
+   "id": "sf-diesel-oil-text-typos",
+   "seconds": 47.2,
+   "answer": "**Engine oil capacity — Hyundai Santa Fe 2016–2018 owner handbook (not a workshop manual), p.792:**\n\n- **Diesel engine with DPF: 6.3 l (6.66 US qt.)** (p.792)\n\nThat row is printed simply as \"Diesel Engine with DPF\", without splitting R2.0 from R2.2 (the page only splits R2.0 / R2.2 for coolant: 7.8 l and 7.7 l respectively) (p.792). So for your 2.0 CRDi with DPF, 6.3 l is the figure the handbook gives.\n\nNote: the page doesn't state whether this capacity accounts for the oil filter, so buy a little extra and top up to the \"F\" mark on the dipstick after refilling — the handbook says to check the level with the dipstick and not to overfill (p.710). The pages retrieved print viscosity charts only for the gasoline engines (2.4L MPI and 3.3L), so I can't quote a diesel oil grade from this manual (p.794). Tell me if you want me to look that up on the web.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2016 Hyundai Santa Fe 2.0 CRDi diesel",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": null,
+    "confidence": 0.82
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "How many litters of oil i need to chang the oil of my hyundai santa fe 2016 2.0 liter diesel"
+  },
+  {
+   "id": "sf-petrol-oil-text",
+   "seconds": 34.3,
+   "answer": "**Engine oil capacity — 2.4 L petrol, Europe: 4.8 l (5.07 US qt.)**\n\nFrom the capacity table: \"(For Europe) 4.8 l (5.07 US qt.)\" for the gasoline engine (p.792). For markets other than Europe the same table prints \"(Except Europe) 4.6 l (4.86 US qt.) *3 / 4.8 l (5.07 US qt.) *4\" (p.792), where the footnotes are *3 yellow engine oil dipstick (if equipped) and *4 red engine oil dipstick (if equipped) (p.793) — those dipstick footnotes belong only to the Except-Europe rows.\n\nNote on the table layout: on p.792 the cells are split across lines in the retrieved text, so the 4.8 l Europe figure sits in the gasoline engine-oil block alongside the 3.3 L value of 5.7 l (6.02 US qt.). Nothing on these pages prints a separate Europe oil capacity for a 2.4 L \"GDI\" versus MPI variant.\n\nOil grade caveat: the viscosity chart on p.794 for petrol is headed \"(2.4L MPI) 20W-50 / 10W-30 / 15W-40 / 5W-30 (5W-40)\" — i.e. it is labelled MPI, not GDI, so if your car is the GDI I'd confirm the grade against your own handbook. Oil quality spec printed is API Service SM *5, ILSAC GF-4 or above (p.792), with *5: if API SM or ACEA A5 is not available in your country, you may use API SL or ACEA A3 (p.793).\n\nSource: Hyundai Santa Fe (DM) 2016–2018 **owner handbook**, pages 792–794 — not a workshop manual, so it does not state whether the figure includes the filter. Adding your VIN would confirm MPI vs GDI.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2016 Hyundai Santa Fe 2.4 GDI gasoline",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": "5W-30 API SM / ILSAC GF-4 gasoline engine oil",
+    "confidence": 0.72
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "engine oil capacity for a 2016 hyundai santa fe 2.4 petrol europe"
+  },
+  {
+   "id": "sf-coolant-diesel-r20",
+   "seconds": 22.1,
+   "answer": "**Coolant capacity — 7.8 l (8.24 US qt.)**\n\nFrom the capacities table of the Hyundai Santa Fe 2016–2018 **owner's manual** (not a workshop manual), the coolant row for the diesel engine **R2.0** — your 2.0 CRDi — reads 7.8 l (8.24 US qt.) (p.792). For reference on the same table, the R2.2 diesel is 7.7 l (8.13 US qt.) (p.792), so make sure the R2.0 figure is the one you use.\n\nThe manual also specifies an ethylene-glycol-based coolant for the aluminium radiator (p.792), and warns not to use a solution with more than 60% or less than 35% antifreeze (p.714).\n\nNote: this is the full system fill. For a simple drain-and-refill you'll put in less; top up to the F (MAX) mark on the reservoir with the engine cool (p.714).",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2016 Hyundai Santa Fe 2.0 CRDi diesel",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": "ethylene glycol based engine coolant for aluminum radiator",
+    "confidence": 0.79
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "coolant capacity for my 2016 santa fe 2.0 crdi diesel"
+  },
+  {
+   "id": "sf-atf-petrol-24",
+   "seconds": 23.5,
+   "answer": "**Automatic transaxle fluid — 2017 Santa Fe 2.4 GDI gasoline**\n\nFrom the capacities table in the **Hyundai Santa Fe 2016–2018 owner's manual (not a workshop manual), p.792**:\n\n- Automatic transaxle, Gasoline Engine 2.4L: **7.1 l (7.50 US qt.)** (p.792)\n- Fluid specified in that same row: **MICHANG ATF SP-IV, SK ATF SP-IV, NOCA ATF SP-IV** (p.792)\n\nTwo cautions:\n\n1. This is the handbook's **total system capacity**, not a drain-and-refill quantity — a pan drain typically takes far less. The handbook gives no separate refill figure, and it says the level/change should be handled per the maintenance schedule by a dealer (p.708).\n2. On the same page the **coolant** row for the 2.4L gasoline reads 7.1 ~ 7.4 l (7.50 ~ 7.51 US qt.) (p.792) — don't confuse the two; the 7.1 l figure above is the one in the ATF SP-IV row.\n\nThe manual prints no automatic transaxle drain/refill volume or torque for the drain plug; if you need that, say so and I'll look it up on the web and keep it separate from these factory figures.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2017 Hyundai Santa Fe 2.4 GDI gasoline",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": "ATF SP-IV automatic transmission fluid",
+    "confidence": 0.8
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "how much automatic transmission fluid does a 2017 santa fe 2.4 gasoline take"
+  },
+  {
+   "id": "sf-mtf",
+   "seconds": 53.2,
+   "answer": "**Manual gearbox (manual transaxle) — Hyundai Santa Fe 2016–2018 owner's manual, p.792 (owner handbook, not a workshop manual)**\n\n- **Quantity:** 1.8 ~ 1.9 l (1.90 ~ 2.00 US qt.) (p.792)\n- **Grade:** API GL-4, SAE 70W (HK MTF 70W (SK), SPIRAX S6 GHME 70W (H.K.SHELL)) (p.792)\n\nNotes:\n- The \"Recommended lubricants and capacities\" table prints this manual‑transaxle line once, without splitting it by engine, so it is the figure that applies to your 2.0 CRDi as printed (p.792). There is no separate R2.0-specific manual gearbox row on these pages.\n- The listing continues onto p.793 with the differential/axle oils: 0.35 l (0.37 US qt.), HYPOID GEAR OIL API GL-5, SAE 75W/90 (SHELL HD AXLE OIL 75W90 or equivalent) and 0.58 l (0.61 US qt.) with the same HYPOID GEAR OIL API GL-5, SAE 75W/90 specification (p.793) — quoted only in case you also need those; the page text does not label which axle each belongs to for your variant.\n\nIf you need the drain/fill plug torques or an official refill procedure, that is in the workshop manual (MT group), which is not part of these pages — tell me and I can look it up on the web.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2016 Hyundai Santa Fe 2.0 CRDi diesel",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": "API GL-4 SAE 70W manual transmission fluid",
+    "confidence": 0.82
+   },
+   "tp": 3,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "manual gearbox oil quantity and grade santa fe 2016"
+  },
+  {
+   "id": "sf-fuel-tank",
+   "seconds": 19.2,
+   "answer": "**64 litra (16.90 US gal.)** — kjo është kapaciteti i rezervuarit të karburantit sipas tabelës së specifikimeve \"Fuel — 64 l (16.90 US gal.)\" (p.793).\n\nShënime:\n- Në këtë faqe rreshti i karburantit është i vetëm, pa ndarje sipas motorit (R2.0/R2.2/benzinë), pra vlen edhe për versionin dizel; manuali nuk printon rresht të veçantë dizel për rezervuarin (p.793). Për llojin e karburantit ai referon: \"Refer to 'Fuel requirements' in section 1\" (p.793).\n- Manuali gjithashtu konfirmon që kapaciteti jepet në kapitullin 8 (p.170).\n\nBurimi: Hyundai Santa Fe 2016–2018 **owner manual** (manual i pronarit, jo manual servisi), faqe 793. Nëse dëshiron shifrën e saktë për motorin tënd konkret (R2.0 apo R2.2), shto VIN-in.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2016 Hyundai Santa Fe diesel",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": null,
+    "confidence": 0.86
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "si eshte kapaciteti i rezervuarit te karburantit te santa fe 2016 dizel"
+  },
+  {
+   "id": "sf-tyre-pressure",
+   "seconds": 22.5,
+   "answer": "**Manual figure — 235/65R17: 2.3 (33, 230)**\n\nFrom the tyre and wheel specification table: 235/65R17 on a 7.0J×17 rim, 2.3 (33,230) in all four columns (p.789). The table prints the value once per load/axle column, so it is the same front and rear, lightly or fully loaded: 2.3 bar = 33 psi = 230 kPa. That row is not split by engine, so it applies to your 2.0 CRDi.\n\nSame row also prints the wheel nut torque 11~13 (79~94, 107~127) (p.789).\n\nNotes printed with the table:\n- It is permissible to add 20 kPa (3 psi) to the standard pressure if colder temperatures are expected soon; tyres typically lose 7 kPa (1 psi) per 7°C (12°F) drop (p.789).\n- Air inflation per altitude: +10 kPa/1 km (+2.4 psi/1 mile) (p.789).\n- Check cold: \"cold\" means the vehicle has been sitting at least three hours or driven no more than 1.6 km (1 mile) (p.732), and the recommended cold pressure is also on the tyre label on the driver's side centre pillar (p.732).\n\nSource: Hyundai Santa Fe 2016–2018 **owner handbook** (not a workshop manual), pp.789, 732. No web search needed.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2016 Hyundai Santa Fe Wagon 2.0 CRDi diesel",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": null,
+    "confidence": 0.88
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "tyre pressure for 235/65R17 on a 2016 santa fe"
+  },
+  {
+   "id": "sf-wheel-nut-torque",
+   "seconds": 16.9,
+   "answer": "**Wheel nut torque: 11~13 kgf·m (79~94 lbf·ft)** — the manual prints this for both steel and aluminium alloy wheels (p.649).\n\nNotes from the same manual:\n- Tighten in a criss-cross pattern — \"every other nut until they are all tight\" (p.649).\n- Fit the nuts with the tapered small-diameter ends inward, and jiggle the tyre to seat it before final tightening (p.648).\n- Don't stand on the wrench handle or use an extension pipe over it (p.649).\n- Check lug nut tightness after tyre rotation (p.733).\n\nSource: Hyundai Santa Fe (DM) 2016–2018 **owner handbook** (not the workshop manual), pages 647–649, 733. The handbook gives the figure only in kgf·m/lbf·ft — no Nm value is printed, so I won't convert beyond what's on the page.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2016 Hyundai Santa Fe Wagon 2.0 CRDi diesel",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": "1/2-inch drive torque wrench (up to 130 Nm)",
+    "confidence": 0.92
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "wheel nut torque"
+  },
+  {
+   "id": "sf-axle-oil",
+   "seconds": 61.8,
+   "answer": "## Manual first — Hyundai Santa Fe 2016–2018 **owner handbook** (not a workshop manual)\n\n**Grade (printed twice on p.793):** \"HYPOID GEAR OIL API GL-5, SAE 75W/90 (SHELL HD AXLE OIL 75W90 or equivalent)\" (p.793).\n\n**Amount — this is where the page is not conclusive for your car.** The capacity table on p.793 prints three volumes against the hypoid-oil rows: 0.35 l (0.37 US qt.), 0.65 l (0.69 US qt.) for 3.3L and 0.58 l (0.61 US qt.) (p.793). In the retrieved text the row labels (rear differential vs. transfer case) are lost, and **no row is printed that is explicitly tied to the R2.0 diesel 4WD**. So I can give you the grade with confidence, but I will not assign one of those three numbers to your rear differential from these pages.\n\nWhat the manual does confirm for your 4WD: \"Inspect transfer case oil (4WD)\" and \"Inspect rear differential oil (4WD)\" are separate scheduled items (p.702, also p.698), and manual transaxle fluid, transfer case oil and differential oil should be changed anytime they have been submerged in water (p.683).\n\n## What to do\nThe fill quantity is set by the axle assembly, not the engine, and the correct check is the filler-plug level: fill to the bottom edge of the filler hole and stop. If you want an exact litre figure, a workshop manual (or the axle code from your VIN) is needed — the owner handbook pages here don't isolate it for the 2.0 diesel 4WD.\n\n**Source:** Hyundai Santa Fe 2016–2018 owner manual, pp. 793, 702, 698, 683.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2016 Hyundai Santa Fe 2.0 CRDi diesel",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": "API GL-5 SAE 75W-90 hypoid gear oil",
+    "confidence": 0.88
+   },
+   "tp": 2,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "rear differential oil grade and amount for the 4WD 2.0 diesel santa fe 2016"
+  },
+  {
+   "id": "kona-fuel-tank-glyph",
+   "seconds": 24.6,
+   "answer": "**Fuel tank capacity: 50 ℓ (13.21 US gal.)** (p.31)\n\nThe capacity table in your manual prints a single \"Fuel\" row of 50 ℓ (13.21 US gal.) (p.31), with no separate figure by engine or fuel type — so this applies to your petrol Kona. The gauge section confirms the tank capacity is given in that chapter (p.106).\n\nSource: Hyundai Kona 2017–2023 **owner handbook** (not a workshop manual), p.31.\n\nNote: this handbook covers the whole 2017–2023 Kona range and prints one fuel figure for all versions. If you need the exact capacity tied to your specific engine and market build, add the VIN.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2018 Hyundai Kona gasoline",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": null,
+    "confidence": 0.9
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "fuel tank capacity hyundai kona 2018 petrol"
+  },
+  {
+   "id": "kona-urea",
+   "seconds": 28.0,
+   "answer": "**Manual: no tank capacity printed.** The Kona owner handbook (Hyundai Kona 2017–2023, an owner handbook, not a workshop manual) covers the urea/SCR system in detail but nowhere prints the urea tank's capacity. The only litre figure it gives is a warning threshold: the low-urea indication appears below Urea 5.4 liter, and when the \"Low Urea\" message shows with the SCR warning lamp the urea tank needs to be refilled (p.663). It also notes refilling is needed approximately every 5,600 km, with consumption depending on road profile, driving pattern and environmental conditions (p.666), and that only ISO 22241- or DIN 70070-specified urea solution may be used (p.668).\n\n**From the web (not a factory figure):** one aftermarket source states the Hyundai Kona's AdBlue tank holds roughly 10 litres (abheco.com), and owners on Hyundai Forums report pouring about 8 litres, and over 10 litres on a previous fill — consistent with a ~10 L tank, but neither is a Hyundai specification.\n\nPractical takeaway: buy a 10 L canister and fill to the tank mark; don't force extra in, since the handbook warns an over-filled tank can expand when frozen and seriously damage the tank or urea system (p.666).\n\nIf you add the VIN I can confirm the market-specific spec; an exact tank volume would need the Kona (OS) workshop manual or a dealer parts figure.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2019 Hyundai Kona 1.6 CRDi diesel",
+   "web_sources": 16,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": "AdBlue ISO 22241 urea solution (diesel exhaust fluid) 10 L",
+    "confidence": 0.86
+   },
+   "tp": 0,
+   "fp": 0,
+   "fn": 1,
+   "notes": [
+    "missing '12'"
+   ],
+   "question": "how much urea (AdBlue) does a 2019 kona diesel hold"
+  },
+  {
+   "id": "civic-brake-hose-except-typer",
+   "seconds": 17.7,
+   "answer": "**35 N·m (3.6 kgf·m, 26 lbf·ft)**\n\nThe torque table lists, for the **front brake caliper (Except Type‑R)**, the brake hose connection — banjo bolt — at 35 N·m (3.6 kgf·m, 26 lbf·ft) (p.24). Your 2018 Civic 1.5 VTEC Turbo sedan/coupe/hatch falls under the \"Except Type‑R\" condition, so that is the figure. (For reference on the same page, the Type‑R front caliper instead uses a brake *line* flare nut at 15 N·m (1.5 kgf·m, 11 lbf·ft) — not your car.)\n\nNotes from the procedure pages:\n- Use **new sealing washers** when connecting the hose to the caliper body with the banjo bolt (p.26).\n- Bleed the brake system and check the hose/line afterwards (p.26).\n- Front bleed screw (Except Si): 8.4 N·m (0.86 kgf·m, 6.2 lbf·ft) (p.24).\n\nSource: Honda Civic 2016–2021 workshop manual, Brakes section — torque table p.24, front brake hose removal/installation p.26.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2018 Honda Civic 1.5 VTEC Turbo gasoline",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": "brake hose banjo bolt copper sealing washers",
+    "confidence": 0.86
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "front brake hose banjo bolt torque for a 2018 honda civic 1.5 turbo (not the Type R)"
+  },
+  {
+   "id": "civic-typer-brake-line",
+   "seconds": 24.0,
+   "answer": "**Front brake line flare nut — 15 N·m (1.5 kgf·m, 11 lbf·ft)**\n\nFrom the brake torque/connection table: \"Front brake caliper (Type-R) — Brake line — 15 N·m (1.5 kgf·m, 11 lbf·ft), Flare nut\" (p.24). The Type-R row also gives the caliper bleed screw as 14 N·m (1.4 kgf·m, 10 lbf·ft) (p.24).\n\nNote the neighbouring rows are **not** your car's front line:\n- \"Front brake caliper (Except Type-R) — Brake hose — 35 N·m (3.6 kgf·m, 26 lbf·ft), Banjo bolt\" (p.24) — your Type-R uses a flare-nut brake line at the caliper, not a banjo bolt.\n- Other flare-nut figures on the same page, if you're working further up the circuit: master cylinder brake line 22 N·m (2.2 kgf·m, 16 lbf·ft); VSA modulator-control unit brake line 15 N·m (1.5 kgf·m, 11 lbf·ft) for the 10 mm nut and 22 N·m (2.2 kgf·m, 16 lbf·ft) for the 12 mm nut (p.24).\n\nSource: Honda Civic 2016–2021 workshop manual, Brakes section, p.24 (torque table); front hose/line R&I procedure on p.26 and p.30. Bleed the system afterwards (p.80).",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2019 Honda Civic Type-R 2.0T gasoline",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": null,
+    "confidence": 0.85
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "front brake line flare nut torque on a 2019 civic type r"
+  },
+  {
+   "id": "civic-bleed-si",
+   "seconds": 17.6,
+   "answer": "**Front caliper bleed screw — Si: 8.5 N·m (0.87 kgf·m, 6.3 lbf·ft)** (p.24)\n\nThat row is under \"Front brake caliper (Except Type-R)\", where the bleed screw is split by trim: \"Bleed screw (Except Si) 8.4 N·m (0.86 kgf·m, 6.2 lbf·ft)\" and \"Bleed screw (Si) 8.5 N·m (0.87 kgf·m, 6.3 lbf·ft)\" (p.24). Your 2018 Civic Si takes the Si value. (The Type-R front caliper bleed screw, 14 N·m / 1.4 kgf·m / 10 lbf·ft, and the rear caliper bleed screw, 17 N·m / 1.7 kgf·m / 13 lbf·ft, are separate rows — not your front spec.)\n\nFor reference on the same connection: front brake hose banjo bolt 35 N·m (3.6 kgf·m, 26 lbf·ft) (p.24).\n\nSource: Honda Civic 2016–2021 workshop manual (service manual, not owner handbook), Brakes section — torque table p.24; bleed procedure p.80.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": "2018 Honda Civic 1.5T Si gasoline",
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": null,
+    "confidence": 0.86
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [
+    "mentions '8.4' only to exclude it"
+   ],
+   "question": "front caliper bleed screw torque, 2018 civic si"
+  },
+  {
+   "id": "ask-vague",
+   "seconds": 4.5,
+   "answer": "What part or fluid do you mean?",
+   "clarify": true,
+   "refused": false,
+   "vehicle": null,
+   "web_sources": 0,
+   "verdict": null,
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "what type"
+  },
+  {
+   "id": "ask-no-car",
+   "seconds": 4.4,
+   "answer": "Happy to help! Which car is it? You can send the VIN, or the make, model and year.",
+   "clarify": true,
+   "refused": false,
+   "vehicle": null,
+   "web_sources": 0,
+   "verdict": null,
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "how much oil should i put in my car"
+  },
+  {
+   "id": "ask-year",
+   "seconds": 4.6,
+   "answer": "Which model year is your Santa Fe?",
+   "clarify": true,
+   "refused": false,
+   "vehicle": "Hyundai Santa Fe diesel",
+   "web_sources": 0,
+   "verdict": null,
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "how many liters of oil for my hyundai santa fe diesel"
+  },
+  {
+   "id": "ask-fuel",
+   "seconds": 5.1,
+   "answer": "Which engine does your 2016 Santa Fe have?",
+   "clarify": true,
+   "refused": false,
+   "vehicle": "2016 Hyundai Santa Fe",
+   "web_sources": 0,
+   "verdict": null,
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "how many liters of engine oil for my 2016 hyundai santa fe"
+  },
+  {
+   "id": "wrong-make-with-vin",
+   "seconds": 4.6,
+   "answer": "We don't have a Toyota Corolla manual — your pinned car is a 2016 Hyundai Santa Fe 2.0 CRDi. Which car should I answer for?",
+   "clarify": true,
+   "refused": false,
+   "vehicle": "2016 Hyundai Santa Fe Wagon 2.0 CRDi",
+   "web_sources": 0,
+   "verdict": null,
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "what is the oil capacity of my toyota corolla"
+  },
+  {
+   "id": "definition",
+   "seconds": 19.8,
+   "answer": "**DPF = Diesel Particulate Filter.**\n\nThe Hyundai Tucson 2021–2023 owner handbook spells it out when describing the warning lamp: if the accumulated soot is out of the detection range, the soot oxidization process does not occur, and the Diesel Particulate Filter (DPF) lamp illuminates (p.730).\n\nWhat it does, per the same handbook (p.730): it burns off (or oxidizes) the accumulated soot in accordance with driving situations, unlike a disposable air filter — the accumulated soot is automatically purged out by the engine control system and by the high exhaust-gas temperature at normal/high driving speeds. When the vehicle is continually driven at repeated short distances or at low speed for a long time, the accumulated soot may not be automatically removed because of low exhaust gas temperature (p.730). It also warns that the lamp stops illuminating when the driving speed exceeds 37 mph (60 km/h), or when the engine rpm is between 1,250 and 2,500 with the gear in the 2nd position or above for approximately 25 minutes (p.730) — note that regeneration figure is specific to that Tucson, not a universal value.\n\nFuel caution (Tucson 2015–2020, p.9): fuel with high sulfur (more than 50 ppm sulfur) and unspecified additives can cause the DPF system to be damaged and white smoke can be emitted.\n\nSource: Hyundai Tucson 2021–2023 owner handbook p.730 and Hyundai Tucson 2015–2020 owner handbook p.9 — both owner handbooks, not workshop manuals. No car is pinned, so if you want the regeneration conditions and DPF lamp behaviour for your own car, tell me the make, model, year and engine.",
+   "clarify": false,
+   "refused": false,
+   "vehicle": null,
+   "web_sources": 0,
+   "verdict": {
+    "ok": true,
+    "manual_problems": [],
+    "web_problems": [],
+    "shop_item": null,
+    "confidence": 0.86
+   },
+   "tp": 1,
+   "fp": 0,
+   "fn": 0,
+   "notes": [],
+   "question": "what does DPF mean"
+  }
+ ]
+}
