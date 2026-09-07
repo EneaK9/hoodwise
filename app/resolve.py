@@ -256,27 +256,33 @@ def model_year_ranges(make: str, model: str) -> list[tuple[int, int]]:
     return [(int(r["year_from"]), int(r["year_to"])) for r in rows if r.get("year_from") and r.get("year_to")]
 
 
-def decoded_from_text(
-    message: str, catalog: list[tuple[str, str]], context: str = ""
-) -> dict[str, Any] | None:
-    """A vehicle profile from the conversation when there is no VIN.
+def vehicle_catalog_with_years() -> list[dict[str, Any]]:
+    """What the understanding model is allowed to recognise: our manuals, with year ranges."""
+    from app.db import fetch_all
 
-    The car may be named in an earlier turn and the year, engine size, or fuel supplied
-    later as a one-word reply. Newer details overlay older ones. Marked source "text".
-    """
-    from app.intent import parse_vehicle_details, parse_vehicle_mention
-
-    mention = parse_vehicle_mention(message, catalog) or (
-        parse_vehicle_mention(context, catalog) if context else None
-    )
-    if not mention:
-        return None
-    for source in (context, message):
-        if not source:
+    try:
+        rows = fetch_all(
+            "SELECT make, model, year_from, year_to FROM vehicles ORDER BY make, model, year_from"
+        )
+    except Exception:
+        return []
+    out: dict[tuple[str, str], dict[str, Any]] = {}
+    for r in rows:
+        if not (r.get("make") and r.get("model")):
             continue
-        for key, value in parse_vehicle_details(source).items():
-            if value:
-                mention[key] = value
+        entry = out.setdefault((r["make"], r["model"]), {"make": r["make"], "model": r["model"], "years": []})
+        if r.get("year_from") and r.get("year_to"):
+            span = (int(r["year_from"]), int(r["year_to"]))
+            if span not in entry["years"]:
+                entry["years"].append(span)
+    return list(out.values())
+
+
+def decoded_from_mention(mention: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Vehicle profile from a structured mention (make/model/year/displacement/fuel).
+    Marked source "text" so the UI and the answer say it came from the user's words."""
+    if not mention or not (mention.get("make") and mention.get("model")):
+        return None
     engine_label = f"{mention['displacement_l']}L" if mention.get("displacement_l") else None
     return {
         "source": "text",
@@ -299,13 +305,35 @@ def decoded_from_text(
     }
 
 
+def decoded_from_text(
+    message: str, catalog: list[tuple[str, str]], context: str = ""
+) -> dict[str, Any] | None:
+    """Offline fallback (no API key): regex read of the car from the conversation."""
+    from app.intent import parse_vehicle_details, parse_vehicle_mention
+
+    mention = parse_vehicle_mention(message, catalog) or (
+        parse_vehicle_mention(context, catalog) if context else None
+    )
+    if not mention:
+        return None
+    for source in (context, message):
+        if not source:
+            continue
+        for key, value in parse_vehicle_details(source).items():
+            if value:
+                mention[key] = value
+    return decoded_from_mention(mention)
+
+
 def resolve_vehicle(
     message: str,
     vin: str | None,
     session_vin: str | None = None,
     context: str = "",
+    mention: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Pin the car. `context` is the previous user turn, used only for follow-ups."""
+    """Pin the car. `mention` is the understanding model's read of the car from the text;
+    when it is None (offline) the regex fallback reads the message and context."""
     from app.intent import is_follow_up
 
     found = find_vins(message)
@@ -323,7 +351,9 @@ def resolve_vehicle(
         # No VIN: the question itself may name the car. Never search every manual blindly.
         from app.vin import _match_variant
 
-        decoded = decoded_from_text(message, vehicle_catalog(), context)
+        decoded = decoded_from_mention(mention) if mention is not None else decoded_from_text(
+            message, vehicle_catalog(), context
+        )
         if decoded:
             decoded["variant_id"] = _match_variant(decoded)
     hints = infer_hints_from_decode(decoded) + infer_hints_from_text(message)

@@ -16,7 +16,8 @@ from app.clarify import clarification
 from app.intent import part_kind
 from app.shop import shop_links
 from app.snippets import attach_snippets, render_snippet, snippet_needles
-from app.resolve import model_year_ranges, public_vehicle, resolve_vehicle
+from app.resolve import model_year_ranges, public_vehicle, resolve_vehicle, vehicle_catalog_with_years
+from app.understand import mention_dict, understand
 from app.auth import (
     COOKIE_NAME,
     create_user,
@@ -425,11 +426,36 @@ def _clarify_result(ask: dict, kind: str) -> dict:
 def _run_chat(body: ChatIn, request: Request, user: dict | None) -> tuple[str, dict, dict | None, list[str], str]:
     limit_chat(request)
     context = _previous_user_message(body.session_id)
-    kind = part_kind(body.message, context)
-    resolved = resolve_vehicle(body.message, body.vin, _session_vin(body.session_id), context=context)
+    session_vin = _session_vin(body.session_id)
+
+    # 1. The VIN, if any, pins the car before anything is interpreted.
+    pinned = resolve_vehicle(body.message, body.vin, session_vin, context=context, mention={})
+    pinned_vehicle = public_vehicle(pinned.get("decoded")) if pinned.get("vin") else None
+
+    # 2. The model reads the question: part, car from text, what is missing, what to ask.
+    understanding = understand(body.message, context, pinned_vehicle, vehicle_catalog_with_years())
+    if understanding is not None:
+        kind = understanding.part if understanding.part != "other" else ""
+        mention = mention_dict(understanding)
+        resolved = pinned if pinned.get("vin") else resolve_vehicle(
+            body.message, body.vin, session_vin, context=context, mention=mention or {}
+        )
+        vehicle = public_vehicle(resolved.get("decoded"))
+        ask = None
+        if understanding.missing and understanding.ask:
+            ask = {"missing": understanding.missing[0], "ask": understanding.ask, "options": understanding.options}
+        search_text = understanding.search_query or None
+        restated = understanding.restated
+    else:
+        # Offline fallback: regex heuristics.
+        kind = part_kind(body.message, context)
+        resolved = resolve_vehicle(body.message, body.vin, session_vin, context=context)
+        vehicle = public_vehicle(resolved.get("decoded"))
+        ask = clarification(body.message, vehicle, kind, context, year_ranges=model_year_ranges)
+        search_text = None
+        restated = ""
+
     session_id = _ensure_session(body, user, resolved.get("variant_id") or body.variant_id, resolved.get("vin"))
-    vehicle = public_vehicle(resolved.get("decoded"))
-    ask = clarification(body.message, vehicle, kind, context, year_ranges=model_year_ranges)
     if ask:
         result = _clarify_result(ask, kind)
         message_id = _store_turn(session_id, body.message, result)
@@ -443,6 +469,8 @@ def _run_chat(body: ChatIn, request: Request, user: dict | None) -> tuple[str, d
         vehicle_id=resolved.get("vehicle_id"),
         kind=kind,
         context=context,
+        search_text=search_text,
+        restated=restated,
     )
     if result.get("refused"):
         result["shop"] = None
@@ -453,6 +481,7 @@ def _run_chat(body: ChatIn, request: Request, user: dict | None) -> tuple[str, d
             vehicle,
             result.get("answer") or "",
             context=context,
+            kind=kind if understanding is not None else None,
         )
     message_id = _store_turn(session_id, body.message, result)
     log.info(

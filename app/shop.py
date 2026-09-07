@@ -139,12 +139,13 @@ def extract_spec(
     answer: str = "",
     vehicle: dict[str, Any] | None = None,
     context: str = "",
+    kind: str | None = None,
 ) -> str | None:
     """Exact type for the asked-about part, using only that part's patterns."""
     if answer and NO_SPEC.search(answer):
         return None
     text = _blob(question, retrieved, answer)
-    kind = _kind(question, context)
+    kind = kind if kind is not None else _kind(question, context)
     if kind == "tire":
         hit = TIRE_RE.search(text)
         return hit.group(0).upper().replace(" ", "") if hit else None
@@ -187,8 +188,10 @@ def _vehicle_bits(vehicle: dict[str, Any] | None) -> list[str]:
 POSITION_WORDS = ("fog", "headlight", "headlamp", "low beam", "high beam", "brake", "reverse", "indicator", "cabin", "rear", "front")
 
 
-def search_query(spec: str, question: str, vehicle: dict[str, Any] | None, context: str = "") -> str:
-    kind = _kind(question, context)
+def search_query(
+    spec: str, question: str, vehicle: dict[str, Any] | None, context: str = "", kind: str | None = None
+) -> str:
+    kind = kind if kind is not None else _kind(question, context)
     parts: list[str] = []
     # Fluids are generic products: the car name turns eBay into car listings.
     if kind not in FLUID_KINDS:
@@ -319,13 +322,14 @@ def shop_links(
     vehicle: dict[str, Any] | None = None,
     answer: str = "",
     context: str = "",
+    kind: str | None = None,
 ) -> dict[str, Any] | None:
-    kind = _kind(question, context)
-    if not kind:
+    kind = kind if kind is not None else _kind(question, context)
+    if not kind or kind == "other":
         return None
     if SKIP_INTENT.search(question) and kind not in FLUID_KINDS and kind != "bulb":
         return None
-    spec = extract_spec(question, retrieved, answer, vehicle, context)
+    spec = extract_spec(question, retrieved, answer, vehicle, context, kind=kind)
     source = "manual" if spec else "search"
     research = None
     if not spec and kind == "bulb":
@@ -340,7 +344,7 @@ def shop_links(
         label = "diesel engine oil" if fuel == "diesel" else "petrol engine oil"
         if fuel == "diesel" and re.search(r"\bdpf\b", _blob(question, retrieved, answer), re.I):
             label += " DPF low SAPS"
-    query = search_query(label, question, vehicle, context)
+    query = search_query(label, question, vehicle, context, kind=kind)
     if not query:
         return None
     if source == "manual":

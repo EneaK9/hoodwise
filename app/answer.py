@@ -438,12 +438,17 @@ def generate_answer(
     vehicle_id: str | None = None,
     kind: str = "",
     context: str = "",
+    search_text: str | None = None,
+    restated: str = "",
 ) -> dict[str, Any]:
     from app.intent import is_follow_up
 
-    # "and where do I buy them" retrieves nothing on its own; search with the prior turn.
-    search_text = f"{context} {question}" if context and is_follow_up(question) else question
+    if not search_text:
+        # Offline fallback: "and where do I buy them" retrieves nothing alone; add the prior turn.
+        search_text = f"{context} {question}" if context and is_follow_up(question) else question
     retrieved = retrieve(search_text, variant_id, hints=hints, vehicle_id=vehicle_id, kind=kind)
+    if restated:
+        context = f"{context} | UNDERSTOOD AS: {restated}" if context else f"UNDERSTOOD AS: {restated}"
     retrieved["specs"] = _dedupe_specs(retrieved["specs"], limit=2)
     apply_manual_fuel(vehicle, retrieved)
     rows = fluid_rows(retrieved) if kind in {"engine oil", "coolant", "ATF", "brake fluid", ""} else []
