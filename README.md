@@ -74,3 +74,16 @@ There are no keyword lists or regex interpreters in this path. The model reads; 
 7. **Shop links.** From the verifier's search-ready item name, URL-encoded into allowlisted retailer search pages for `SHOP_REGION` (eu / uk / us). Hosts are checked once per six hours; dead hosts and 404 search paths are dropped. Nothing is parsed out of text by code.
 
 Accuracy eval on hard questions (needs DB + API key): `python -m evals.run_hard_eval` prints precision, recall and F1 over `evals/hard_questions.yaml` and writes `evals/hard_eval_report.json`.
+
+## How a VIN is identified
+
+`app/vindecode.py` layers sources and records a basis for every field it asserts. Nothing is guessed; a field with no source stays empty and the app asks the owner.
+
+1. **Owner confirmation** for this VIN (`vin_confirmations`, written by `POST /api/vin/fuel`).
+2. **The maker's own VIN key**, read by the model from a workshop manual's "Identification Number Description" pages and stored as rows in `vin_keys` (`python -m ingestion.vin_keys --pdf manual.pdf --make Hyundai --source-doc "..."`). Each assertion cites the manual page and the code. Market-scoped rows (US vs rest of world) are filtered by the VIN's region.
+3. **Learned patterns**: other confirmed cars sharing the factory pattern (WMI, positions 4-8, year, plant); asserted only when at least two distinct VINs agree.
+4. **NHTSA vPIC**, the US government database restored locally into schema `vpic` (`db: vPICList_lite plain dump`), exact for US-market VINs and ignored when it reports decode errors.
+5. **Commercial decoders** (Vincario, CarsXE, API Ninjas) as explicit-field evidence.
+6. **ISO 3779 structure**: manufacturer from the WMI register, year from position 10, check digit on North American VINs.
+
+The understanding model receives the identity with its bases and fills only what is left. Eval: `python -m evals.run_vin_eval` scores per-field precision and recall against `evals/vin_cases.yaml`, including "must stay unknown" cases.

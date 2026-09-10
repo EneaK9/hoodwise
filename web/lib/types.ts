@@ -25,6 +25,7 @@ export type VehicleInfo = {
   fuel?: string | null;
   fuel_source?: string | null;
   needs_fuel_confirmation?: boolean;
+  identity_basis?: string[];
   transmission?: string | null;
   label?: string | null;
   variant_id?: string | null;

@@ -15,6 +15,7 @@ type VehicleInfo = {
   fuel?: string | null;
   fuel_source?: string | null;
   needs_fuel_confirmation?: boolean;
+  identity_basis?: string[];
   transmission?: string | null;
   trim?: string | null;
   note?: string | null;
@@ -291,6 +292,16 @@ export function Chat() {
               </p>
             )}
             {vehicle?.note && <p className="text-xs text-steel">{vehicle.note}</p>}
+            {vehicle?.identity_basis && vehicle.identity_basis.length > 0 && (
+              <details className="text-[11px] text-steel">
+                <summary className="cursor-pointer font-medium text-ink">How this car was identified</summary>
+                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                  {vehicle.identity_basis.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
             {vehicle?.history && (
               <div className="space-y-1 text-[11px] text-steel">
                 <p className="font-medium text-ink">History</p>

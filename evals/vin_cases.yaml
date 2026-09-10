@@ -1,0 +1,22 @@
+# VIN identification ground truth. `truth` fields are asserted facts; `unknown_ok` lists fields
+# the decoder is allowed to leave empty (and must NOT guess). Sources noted per case.
+cases:
+  - id: santa-fe-dm-eu-diesel
+    vin: KMHSW81UBGU585399
+    note: Owner's car. Vincario decode + Santa Fe DM VIN key (service manual GI) + owner confirmation of fuel/displacement.
+    truth: {make: Hyundai, model: Santa Fe, year: 2016, body: Wagon, grade: "High grade (TOP)", transmission: AT, drive_side: LHD, plant: "Ulsan (Korea)", fuel: diesel, displacement_l: "2.0"}
+    unknown_ok: [engine]
+  - id: civic-us-2017-15t
+    vin: 19XFC1F79HE028859
+    note: US-market VIN; NHTSA vPIC is authoritative.
+    truth: {make: HONDA, model: Civic, year: 2017, engine: L15B7, fuel: gasoline, displacement_l: "1.5", transmission: "Continuously Variable Transmission (CVT)"}
+    unknown_ok: []
+  - id: invalid-vin-letter-o
+    vin: KMHSW81UBGU58539O
+    invalid: true
+  - id: unknown-pattern-must-not-guess
+    vin: KMHSW81UBGU000001
+    note: Same factory pattern as the owner's car but a different serial; fuel was confirmed for one car only, so it must stay unknown (learning needs two).
+    truth: {make: Hyundai, model: Santa Fe, year: 2016, body: Wagon, transmission: AT}
+    unknown_ok: [engine, fuel, displacement_l]
+    must_be_unknown: [fuel, engine]

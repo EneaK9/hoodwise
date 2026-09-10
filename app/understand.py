@@ -55,7 +55,9 @@ VIN if any (with every field the decoder returned), the user's recent turns, and
 
 How to work:
 - Read the message in any language, with typos. Name the part in plain English.
-- The car: when a VIN is pinned, use it and fill engine and fuel from its data. Displacement in cc,
+- The car: when a VIN is pinned, use it. Its identity_basis lists fields already established with their
+  source (owner confirmation, the maker's VIN key from a workshop manual, confirmed cars with the same
+  pattern, the US government database); treat those as settled. Fill what is left from its data. Displacement in cc,
   a fuel field, the engine code, and CO2 vs fuel consumption all tell you the engine. State the
   basis. When no VIN is pinned, read make, model, year, engine and fuel from the message and the
   earlier turns, using only makes and models present in the catalog. A statement such as
@@ -93,6 +95,7 @@ def _vehicle_text(vehicle: dict[str, Any] | None) -> str:
         for k in (
             "year", "make", "model", "trim", "body", "engine_label", "engine_code", "displacement_l",
             "displacement_cc", "fuel", "fuel_raw", "fuel_source", "emissions_hint", "transmission", "source", "specs",
+            "identity_basis",
         )
     }
     return json.dumps({k: v for k, v in keep.items() if v}, ensure_ascii=False)

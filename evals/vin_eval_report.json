@@ -1,0 +1,194 @@
+{
+ "precision": 1.0,
+ "recall": 1.0,
+ "f1": 1.0,
+ "rows": [
+  {
+   "id": "santa-fe-dm-eu-diesel",
+   "fields": {
+    "fuel": {
+     "value": "diesel",
+     "source": "user",
+     "basis": "confirmed for this VIN"
+    },
+    "displacement_l": {
+     "value": "2.0",
+     "source": "user",
+     "basis": "confirmed for this VIN"
+    },
+    "model": {
+     "value": "SANTAFE",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code S"
+    },
+    "grade": {
+     "value": "High grade (TOP)",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code W"
+    },
+    "body": {
+     "value": "Wagon",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code 8"
+    },
+    "restraint": {
+     "value": "Both side - Active belt",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code 1"
+    },
+    "drive_side": {
+     "value": "LHD",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code B"
+    },
+    "transmission": {
+     "value": "AT",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code B"
+    },
+    "year": {
+     "value": 2016,
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code G"
+    },
+    "plant": {
+     "value": "Ulsan (Korea)",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code U"
+    },
+    "make": {
+     "value": "Genesis / Hyundai",
+     "source": "structure",
+     "basis": "WMI KMH in the manufacturer register"
+    },
+    "built_in": {
+     "value": "SOUTH KOREA",
+     "source": "structure",
+     "basis": "WMI KMH country"
+    }
+   },
+   "notes": []
+  },
+  {
+   "id": "civic-us-2017-15t",
+   "fields": {
+    "make": {
+     "value": "HONDA",
+     "source": "vpic",
+     "basis": "NHTSA vPIC database (US-market VIN)"
+    },
+    "model": {
+     "value": "Civic",
+     "source": "vpic",
+     "basis": "NHTSA vPIC database (US-market VIN)"
+    },
+    "year": {
+     "value": "2017",
+     "source": "vpic",
+     "basis": "NHTSA vPIC database (US-market VIN)"
+    },
+    "body": {
+     "value": "Sedan/Saloon",
+     "source": "vpic",
+     "basis": "NHTSA vPIC database (US-market VIN)"
+    },
+    "grade": {
+     "value": "EX-L / EX-L NAVI",
+     "source": "vpic",
+     "basis": "NHTSA vPIC database (US-market VIN)"
+    },
+    "engine": {
+     "value": "L15B7",
+     "source": "vpic",
+     "basis": "NHTSA vPIC database (US-market VIN)"
+    },
+    "fuel": {
+     "value": "gasoline",
+     "source": "vpic",
+     "basis": "NHTSA vPIC database (US-market VIN)"
+    },
+    "displacement_l": {
+     "value": "1.5",
+     "source": "vpic",
+     "basis": "NHTSA vPIC database (US-market VIN)"
+    },
+    "transmission": {
+     "value": "Continuously Variable Transmission (CVT)",
+     "source": "vpic",
+     "basis": "NHTSA vPIC database (US-market VIN)"
+    },
+    "plant": {
+     "value": "UNITED STATES (USA)",
+     "source": "vpic",
+     "basis": "NHTSA vPIC database (US-market VIN)"
+    },
+    "built_in": {
+     "value": "UNITED STATES (USA)",
+     "source": "structure",
+     "basis": "WMI 19X country"
+    }
+   },
+   "notes": []
+  },
+  {
+   "id": "invalid-vin-letter-o",
+   "ok": true
+  },
+  {
+   "id": "unknown-pattern-must-not-guess",
+   "fields": {
+    "model": {
+     "value": "SANTAFE",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code S"
+    },
+    "grade": {
+     "value": "High grade (TOP)",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code W"
+    },
+    "body": {
+     "value": "Wagon",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code 8"
+    },
+    "restraint": {
+     "value": "Both side - Active belt",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code 1"
+    },
+    "drive_side": {
+     "value": "LHD",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code B"
+    },
+    "transmission": {
+     "value": "AT",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code B"
+    },
+    "year": {
+     "value": 2016,
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code G"
+    },
+    "plant": {
+     "value": "Ulsan (Korea)",
+     "source": "key",
+     "basis": "VIN key in Hyundai Santa Fe DM (2013-2018) service manual, General Information p.7, code U"
+    },
+    "make": {
+     "value": "Genesis / Hyundai",
+     "source": "structure",
+     "basis": "WMI KMH in the manufacturer register"
+    },
+    "built_in": {
+     "value": "SOUTH KOREA",
+     "source": "structure",
+     "basis": "WMI KMH country"
+    }
+   },
+   "notes": []
+  }
+ ]
+}

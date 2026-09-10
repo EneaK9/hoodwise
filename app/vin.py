@@ -176,19 +176,41 @@ def _http_get_json(url: str, *, params: dict[str, str] | None = None, headers: d
         return None
 
 
-def _vpic(vin: str) -> dict[str, Any] | None:
-    url = f"https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/{vin}"
+def _vpic_local_row(vin: str) -> dict[str, Any] | None:
+    """The same government decode from our own copy of the vPIC database (no network,
+    no rate limit). Returns a row shaped like the API's DecodeVinValues result."""
     try:
-        with httpx.Client(timeout=12.0) as client:
-            resp = client.get(url, params={"format": "json"})
-            resp.raise_for_status()
-            data = resp.json()
-    except httpx.HTTPError:
+        rows = fetch_all("SELECT variable, value FROM vpic.spvindecode(%s)", (vin,))
+    except Exception:
         return None
-    results = data.get("Results") or []
-    if not results:
+    if not rows:
         return None
-    row = results[0]
+    raw = {r["variable"]: (r["value"] or "").strip() for r in rows if r.get("value")}
+    return {
+        "Make": raw.get("Make", ""), "Model": raw.get("Model", ""), "ModelYear": raw.get("Model Year", ""),
+        "ErrorCode": raw.get("Error Code", "0"), "EngineModel": raw.get("Engine Model", ""),
+        "TransmissionStyle": raw.get("Transmission Style", ""), "Trim": raw.get("Trim", ""),
+        "BodyClass": raw.get("Body Class", ""), "PlantCountry": raw.get("Plant Country", ""),
+        "DisplacementL": raw.get("Displacement (L)", ""), "DisplacementCC": raw.get("Displacement (CC)", ""),
+        "FuelTypePrimary": raw.get("Fuel Type - Primary", ""),
+    }
+
+
+def _vpic(vin: str) -> dict[str, Any] | None:
+    row = _vpic_local_row(vin)
+    if row is None:
+        url = f"https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/{vin}"
+        try:
+            with httpx.Client(timeout=12.0) as client:
+                resp = client.get(url, params={"format": "json"})
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPError:
+            return None
+        results = data.get("Results") or []
+        if not results:
+            return None
+        row = results[0]
     return _from_vpic_row(row, vin)
 
 
@@ -347,10 +369,8 @@ def apply_engine_identity(decoded: dict[str, Any]) -> dict[str, Any]:
     """Keep provenance straight. The owner's confirmation is the only fuel set here; the
     understanding model reads everything else (decoder fields, engine size, emissions)."""
     source = str(decoded.get("fuel_source") or "")
-    if source == "user" and decoded.get("fuel"):
-        pass
-    elif source.startswith("model:") and decoded.get("fuel"):
-        pass
+    if decoded.get("fuel") and (source in {"user", "key", "learned", "vpic"} or source.startswith("model:")):
+        pass  # an identity layer with a stated basis
     elif decoded.get("fuel"):
         # Either a decoder string ("Diesel", "Benzin") or a stale conclusion cached by an
         # earlier version. Keep the raw text as evidence; the model draws the conclusion.
@@ -368,6 +388,44 @@ def apply_engine_identity(decoded: dict[str, Any]) -> dict[str, Any]:
     return decoded
 
 
+def attach_identity(decoded: dict[str, Any]) -> dict[str, Any]:
+    """Layered identification (owner, maker's VIN key, learned patterns, vPIC, provider,
+    structure). Exact layers overwrite provider guesses; every field keeps its basis."""
+    from app.vindecode import basis_lines, identify
+
+    vin = str(decoded.get("vin") or "")
+    if len(vin) != 17:
+        return decoded
+    identity = identify(vin, decoded)
+    decoded["identity"] = {k: identity.get(k) for k in ("fields", "candidates", "unknown", "vpic", "structure")}
+    decoded["identity_basis"] = basis_lines(identity)
+    exact = {"user", "key", "learned", "vpic"}
+    f = identity.get("fields") or {}
+
+    def same(a: Any, b: Any) -> bool:
+        norm = lambda x: re.sub(r"[^a-z0-9]", "", str(x or "").lower())  # noqa: E731
+        return bool(norm(a)) and norm(a) == norm(b)
+
+    for field, target in (("model", "model"), ("year", "year"), ("body", "body"), ("grade", "trim"), ("transmission", "transmission")):
+        e = f.get(field)
+        if not (e and e["source"] in exact and e["value"]):
+            continue
+        if same(decoded.get(target), e["value"]):
+            continue  # same fact, keep the catalog spelling ("Santa Fe" over the key's "SANTAFE")
+        decoded[target] = int(e["value"]) if field == "year" and str(e["value"]).isdigit() else e["value"]
+    eng = f.get("engine")
+    if eng and eng["source"] in exact:
+        decoded["engine_label"] = eng["value"]
+    if f.get("displacement_l") and f["displacement_l"]["source"] in exact and not decoded.get("displacement_l"):
+        decoded["displacement_l"] = f["displacement_l"]["value"]
+    fuel = f.get("fuel")
+    if fuel and fuel["source"] in exact and fuel["value"] in {"diesel", "gasoline", "hybrid", "electric"}:
+        if decoded.get("fuel_source") != "user":
+            decoded["fuel"] = fuel["value"]
+            decoded["fuel_source"] = fuel["source"] if fuel["source"] != "user" else "user"
+    return decoded
+
+
 def set_vin_fuel(vin: str, fuel: str) -> dict[str, Any] | None:
     """Persist a user-confirmed fuel on the cached decode. Returns the updated decode."""
     vin = vin.strip().upper()
@@ -378,7 +436,11 @@ def set_vin_fuel(vin: str, fuel: str) -> dict[str, Any] | None:
         return None
     decoded["fuel"] = fuel
     decoded["fuel_source"] = "user"
+    from app.vindecode import record_confirmation
+
+    record_confirmation(vin, "fuel", fuel, "user")
     decoded = apply_engine_identity(decoded)
+    decoded = attach_identity(decoded)
     _store_decode(decoded)
     return decoded
 
@@ -756,6 +818,7 @@ def decode_vin(vin: str) -> dict[str, Any]:
                 body["variant_id"] = _match_variant(body)
             had_fuel = bool(cached_body.get("fuel"))
             body = apply_engine_identity(body)
+            body = attach_identity(body)
             if body.get("source") == "vincario" and not body.get("history") and has_global_vin_api():
                 body = enrich_vincario_history(body, vin)
                 body["cached"] = False
@@ -776,6 +839,7 @@ def decode_vin(vin: str) -> dict[str, Any]:
         decoded["fuel"] = prior_user_fuel
         decoded["fuel_source"] = "user"
     decoded = apply_engine_identity(decoded)
+    decoded = attach_identity(decoded)
     if decoded.get("source") == "vincario":
         decoded = enrich_vincario_history(decoded, vin)
 

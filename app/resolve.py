@@ -73,6 +73,8 @@ def public_vehicle(decoded: dict[str, Any] | None) -> dict[str, Any] | None:
         "displacement_cc": decoded.get("displacement_cc"),
         "plant_country": decoded.get("plant_country"),
         "history": decoded.get("history"),
+        "identity": decoded.get("identity"),
+        "identity_basis": decoded.get("identity_basis") or [],
     }
 
 

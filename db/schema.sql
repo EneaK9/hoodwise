@@ -274,3 +274,35 @@ CREATE TABLE eval_results (
   answer_text     TEXT,
   notes           TEXT
 );
+
+-- VIN decoding: keys read from workshop manuals, and confirmed identities that teach the decoder.
+CREATE TABLE IF NOT EXISTS vin_keys (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  make           TEXT NOT NULL,
+  model_line     TEXT,
+  wmis           TEXT[] NOT NULL,
+  position_from  INTEGER NOT NULL,
+  position_to    INTEGER NOT NULL,
+  field          TEXT NOT NULL,
+  code           TEXT,
+  value          TEXT NOT NULL,
+  market         TEXT,
+  market_scope   TEXT NOT NULL DEFAULT 'all',
+  attrs          JSONB,
+  source_doc     TEXT,
+  source_page    INTEGER,
+  source_url     TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS vin_keys_lookup ON vin_keys (make, position_from, code);
+
+CREATE TABLE IF NOT EXISTS vin_confirmations (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  vin         TEXT NOT NULL,
+  pattern     TEXT NOT NULL,
+  field       TEXT NOT NULL,
+  value       TEXT NOT NULL,
+  source      TEXT NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS vin_confirmations_pattern ON vin_confirmations (pattern, field);
